@@ -1,0 +1,12 @@
+*.o
+*.a
+*.obj
+*.lib
+
+*.exe
+*.dll
+a.out
+
+*~
+*.bak
+*.old
