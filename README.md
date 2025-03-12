@@ -26,16 +26,16 @@ Example:
 
 /**
  * reference external symbols:
- * data byte array: uint8_t SYMBOL[];
- * data size, Big Endian: uint32_t SYMBOL##_size_BE;
- * data size, Little Endian: uint32_t SYMBOL##_size_LE;
+ * uint8_t[] data byte array
+ * uint32_t data size, Big Endian
+ * uint32_t data size, Little Endian
  */
 INCBIN(data_bin);
 
 /* to use the data simply cast to any type, e.g. const char* */
 const char *text = (const char *)data_bin;
 
-/* use the GETINC_SIZE() macro to receive the correct size
+/* use the INCBIN_SIZE() macro to receive the correct size
  * value for the target platfrom (excluding terminating NUL) */
-printf("size: %u\n", GETINC_SIZE(data_bin));
+printf("size: %u\n", INCBIN_SIZE(data_bin));
 ```

@@ -50,7 +50,7 @@
 
 #ifdef _MSC_VER
 # if defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86)
-#  define htole32(x)  (x)  /* x86 is always LE */
+#  define htole32(x)  x  /* x86 is always LE */
 # else
 #  define htole32(x)  BSWAP32(htonl(x))
 # endif

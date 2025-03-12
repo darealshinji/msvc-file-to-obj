@@ -50,9 +50,9 @@
 
 /* receive data size */
 #ifdef INCBIN_LITTLE_ENDIAN
-# define GETINC_SIZE(SYMBOL)  SYMBOL##__size_LE__  /* Little Endian only */
+# define INCBIN_SIZE(SYMBOL)  SYMBOL##__size_LE__  /* Little Endian only */
 #else
-# define GETINC_SIZE(SYMBOL)  ntohl(SYMBOL##__size_BE__)  /* any system */
+# define INCBIN_SIZE(SYMBOL)  ntohl(SYMBOL##__size_BE__)  /* any system */
 #endif
 
 #endif /* _MSC_VER */
