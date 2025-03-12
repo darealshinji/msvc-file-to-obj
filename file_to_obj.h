@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 
 const char *simple_basename(const char *str);

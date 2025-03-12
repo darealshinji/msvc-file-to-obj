@@ -1,0 +1,14 @@
+CFLAGS = -Wall -O2
+
+
+all: file_to_obj lorem.txt.o
+
+clean:
+	-rm -f file_to_obj *.o *.obj *.exe
+
+file_to_obj: file_to_obj.c simple_basename.c main.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) file_to_obj.c simple_basename.c main.c -o $@
+
+lorem.txt.o: file_to_obj
+	./file_to_obj lorem.txt
+

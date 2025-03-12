@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2024 Carsten Janssen
+ * Copyright (c) 2024-2025 Carsten Janssen
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,13 +32,15 @@
 
 #ifdef _MSC_VER
 # pragma comment(lib, "ws2_32")
-# include <winsock2.h>  /* htonl */
+# include <winsock2.h>   /* htonl */
 # define strcasecmp  _stricmp
 # define strncasecmp _strnicmp
 #else
 # include <arpa/inet.h>  /* htonl */
-# include <endian.h>  /* htole32 */
+# include <endian.h>     /* htole32 */
 #endif
+
+#include "file_to_obj.h"
 
 #if defined(_MSC_VER) && !defined(__clang__)
 # define BSWAP32(x)  _byteswap_ulong(x)
@@ -48,40 +50,31 @@
 
 #ifdef _MSC_VER
 # if defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86)
-#  define htole32(x)  x  /* x86 is always LE */
+#  define htole32(x)  (x)  /* x86 is always LE */
 # else
 #  define htole32(x)  BSWAP32(htonl(x))
 # endif
 #endif
 
-#ifdef _WIN32
-# define IS_SEP(c)  (c == '\\' || c == '/')
-#else
-# define IS_SEP(c)  (c == '/')
-#endif
-
-#define NUM_NULLBYTES  4
+#define SUFFIX_BE      "__size_BE__"
+#define SUFFIX_LE      "__size_LE__"
+#define SUFFIX_BE_LEN  (sizeof(SUFFIX_BE) - 1)
+#define SUFFIX_LE_LEN  (sizeof(SUFFIX_LE) - 1)
 
 /* write entire buffer to stream */
-#define WRITE_BUF(BUFFER, STREAM) \
-    write_data(&BUFFER, sizeof(BUFFER), STREAM)
+#define WRITE_BUF(BUF, STREAM) \
+    write_data(&BUF, sizeof(BUF), STREAM)
 
-
-
-inline static void set_le_uint32(uint8_t *buf, const size_t offset, const uint32_t val)
-{
-    uint32_t le32val = htole32(val);
-    memcpy(buf + offset, &le32val, 4);
+#define SET_LE_UINT32(BUF,OFF,VAL) \
+{ \
+    const uint32_t tmp = htole32(VAL); \
+    uint8_t *ptr = BUF; \
+    memcpy(ptr + OFF, &tmp, sizeof(uint32_t)); \
 }
 
-/* concatenate str1 + str2 and return copy */
-static char *gluestr(const char *str1, const char *str2)
-{
-    char *buf = malloc(strlen(str1) + strlen(str2) + 1);
-    strcpy(buf, str1);
-    strcat(buf, str2);
-    return buf;
-}
+
+static const uint32_t nullbytes = 0;
+
 
 static FILE *open_file(const char *name, const char *mode)
 {
@@ -102,18 +95,6 @@ static void write_data(const void *ptr, const size_t size, FILE *fp)
         perror("fwrite()");
         exit(1);
     }
-}
-
-const char *simple_basename(const char *str)
-{
-    /* get basename */
-    for (const char *p = str; *p != 0; p++) {
-        if (IS_SEP(*p) && *(p+1) != 0) {
-            str = p + 1;
-        }
-    }
-
-    return str;
 }
 
 static char *symbolic_name(const char *name)
@@ -177,29 +158,30 @@ static void write_header(FILE *fpOut, const uint8_t *machine, long hSizeOfRawDat
     memcpy(&coff_header, machine, 2);
     hHdrSize = sizeof(coff_header) + 3*sizeof(section_table);
     hPointerToSymbolTable = hHdrSize + hSizeOfRawData + 2*sizeof(uint32_t);
-    set_le_uint32((uint8_t *)&coff_header, off_PointerToSymbolTable, hPointerToSymbolTable);
+    SET_LE_UINT32(coff_header, off_PointerToSymbolTable, hPointerToSymbolTable);
     WRITE_BUF(coff_header, fpOut);
 
     /* section table */
-    set_le_uint32((uint8_t *)&section_table, off_SizeOfRawData, hSizeOfRawData);
-    set_le_uint32((uint8_t *)&section_table, off_PointerToRawData, hHdrSize);
+    SET_LE_UINT32(section_table, off_SizeOfRawData, hSizeOfRawData);
+    SET_LE_UINT32(section_table, off_PointerToRawData, hHdrSize);
     WRITE_BUF(section_table, fpOut); /* symbol #1 (data) */
 
-    set_le_uint32((uint8_t *)&section_table, off_SizeOfRawData, sizeof(uint32_t));
-    set_le_uint32((uint8_t *)&section_table, off_PointerToRawData, hHdrSize + hSizeOfRawData);
+    SET_LE_UINT32(section_table, off_SizeOfRawData, sizeof(uint32_t));
+    SET_LE_UINT32(section_table, off_PointerToRawData, hHdrSize + hSizeOfRawData);
     WRITE_BUF(section_table, fpOut); /* symbol #2 (BE size) */
 
-    set_le_uint32((uint8_t *)&section_table, off_PointerToRawData,
+    SET_LE_UINT32(section_table, off_PointerToRawData,
         hHdrSize + hSizeOfRawData + sizeof(uint32_t));
     WRITE_BUF(section_table, fpOut); /* symbol #3 (LE size) */
 }
 
 static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
 {
-    const uint8_t nullbytes[NUM_NULLBYTES] = {0};
-    uint8_t buffer[1024] = {0};
+    uint8_t buffer[1024];
     size_t nread;
     uint32_t uSizeOfRawData;
+
+    memset(buffer, 0, sizeof(buffer));
 
     /* copy file data */
     while ((nread = fread(&buffer, 1, sizeof(buffer), fpIn)) != 0) {
@@ -231,9 +213,6 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
     };
 
     const uint8_t off_SectionNumber = 12;
-    const char * const suffix_be = "_size_BE";
-    const char * const suffix_le = "_size_LE";
-
     uint32_t symbol_len, leSizeOfStringTable, hSizeOfStringTable;
 
     symbol_len = (uint32_t)strlen(symbol);
@@ -244,34 +223,34 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
     hSizeOfStringTable += mangle + symbol_len + 1;
 
     /* symbol table #2 (size BE) */
-    set_le_uint32((uint8_t *)&symbol_table, 4, hSizeOfStringTable);
+    SET_LE_UINT32(symbol_table, 4, hSizeOfStringTable);
     symbol_table[off_SectionNumber] = 0x02;
     WRITE_BUF(symbol_table, fpOut);
-    hSizeOfStringTable += mangle + symbol_len + sizeof(suffix_be);
+    hSizeOfStringTable += mangle + symbol_len + SUFFIX_BE_LEN + 1;
 
     /* symbol table #3 (size LE) */
-    set_le_uint32((uint8_t *)&symbol_table, 4, hSizeOfStringTable);
+    SET_LE_UINT32(symbol_table, 4, hSizeOfStringTable);
     symbol_table[off_SectionNumber] = 0x03;
     WRITE_BUF(symbol_table, fpOut);
-    hSizeOfStringTable += mangle + symbol_len + sizeof(suffix_le);
+    hSizeOfStringTable += mangle + symbol_len + SUFFIX_LE_LEN + 1;
 
     /* string table size */
     leSizeOfStringTable = htole32(hSizeOfStringTable);
     WRITE_BUF(leSizeOfStringTable, fpOut);
 
-    /* _<symbol> */
+    /* _<symbol> + NUL */
     if (mangle) { fputc('_', fpOut); }
     write_data(symbol, symbol_len + 1, fpOut);
 
-    /* _<symbol>_size_BE */
+    /* _<symbol>_size_BE + NUL */
     if (mangle) { fputc('_', fpOut); }
     write_data(symbol, symbol_len, fpOut);
-    WRITE_BUF(suffix_be, fpOut);
+    write_data(SUFFIX_BE, SUFFIX_BE_LEN + 1, fpOut);
 
-    /* _<symbol>_size_LE */
+    /* _<symbol>_size_LE + NUL */
     if (mangle) { fputc('_', fpOut); }
     write_data(symbol, symbol_len, fpOut);
-    WRITE_BUF(suffix_le, fpOut);
+    write_data(SUFFIX_LE, SUFFIX_LE_LEN + 1, fpOut);
 }
 
 /**
@@ -289,7 +268,7 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
  * symbol table (18 bytes)
  *
  * string table size (4 bytes)
- * string table (symbol name string length + NUL byte)
+ * string table (list of null-terminated strings)
  */
 void save_to_coff(const char *infile, const char *outfile, const uint8_t *machine, const char *symbol)
 {
@@ -305,7 +284,9 @@ void save_to_coff(const char *infile, const char *outfile, const uint8_t *machin
     if (outfile) {
         fpOut = open_file(outfile, "wb");
     } else {
-        outTmp = gluestr(infile, ".obj");
+        outTmp = malloc(strlen(infile) + 5);
+        strcpy(outTmp, infile);
+        strcat(outTmp, ".obj");
         fpOut = open_file(outTmp, "wb");
         free(outTmp);
     }
@@ -320,7 +301,7 @@ void save_to_coff(const char *infile, const char *outfile, const uint8_t *machin
 
     rewind(fpIn);
 
-    hSizeOfRawData = raw_data_size + NUM_NULLBYTES;
+    hSizeOfRawData = raw_data_size + sizeof(nullbytes);
 
     write_header(fpOut, machine, hSizeOfRawData);
     save_data_to_coff(fpIn, fpOut, raw_data_size);

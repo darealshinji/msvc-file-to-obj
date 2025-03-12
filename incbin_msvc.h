@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2024 Carsten Janssen
+ * Copyright (c) 2024-2025 Carsten Janssen
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,10 @@
  * THE SOFTWARE
  */
 
+#pragma once
+
+#ifdef _MSC_VER
+
 #if defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86)
 # define INCBIN_LITTLE_ENDIAN
 #else
@@ -40,13 +44,15 @@
 
 /* reference the data */
 #define INCBIN(SYMBOL) \
-    INCBIN_EXTERN const uint8_t SYMBOL[]; \
-    INCBIN_EXTERN const uint32_t SYMBOL##_size_BE; \
-    INCBIN_EXTERN const uint32_t SYMBOL##_size_LE
+    INCBIN_EXTERN const uint8_t  SYMBOL[]; \
+    INCBIN_EXTERN const uint32_t SYMBOL##__size_BE__; \
+    INCBIN_EXTERN const uint32_t SYMBOL##__size_LE__
 
 /* receive data size */
 #ifdef INCBIN_LITTLE_ENDIAN
-# define GETINC_SIZE(SYMBOL)  SYMBOL##_size_LE  /* Little Endian only */
+# define GETINC_SIZE(SYMBOL)  SYMBOL##__size_LE__  /* Little Endian only */
 #else
-# define GETINC_SIZE(SYMBOL)  ntohl(SYMBOL##_size_BE)  /* any system */
+# define GETINC_SIZE(SYMBOL)  ntohl(SYMBOL##__size_BE__)  /* any system */
 #endif
+
+#endif /* _MSC_VER */

@@ -55,16 +55,16 @@
 #endif
 
 /* IMAGE_FILE_MACHINE_AMD64 = 0x8664 */
-static const uint8_t mx64[2] = { 0x64, 0x86 };
+static const uint8_t     mx64[2] = { 0x64, 0x86 };
 
 /* IMAGE_FILE_MACHINE_I386 = 0x014C */
-static const uint8_t mx86[2] = { 0x4C, 0x01 };
+static const uint8_t     mx86[2] = { 0x4C, 0x01 };
 
 /* IMAGE_FILE_MACHINE_ARM64 = 0xAA64 */
-static const uint8_t marm64[2] = { 0x64, 0xAA };
+static const uint8_t   marm64[2] = { 0x64, 0xAA };
 
 /* IMAGE_FILE_MACHINE_ARMNT = 0x01C4 */
-static const uint8_t marmnt[2] = { 0xC4, 0x01 };
+static const uint8_t   marmnt[2] = { 0xC4, 0x01 };
 
 /* IMAGE_FILE_MACHINE_UNKNOWN */
 static const uint8_t munknown[2] = { 0x00, 0x00 };

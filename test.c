@@ -12,7 +12,7 @@ int main()
     const char *txt = (const char *)lorem_txt;
 
     printf("%s\n", txt);
-    printf("GET_SIZE: %d\n", GETINC_SIZE(lorem_txt));
+    printf("GET_SIZE: %u\n", GETINC_SIZE(lorem_txt));
     printf("strlen: %zd\n", strlen(txt));
 
     return 0;

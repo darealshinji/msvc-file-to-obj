@@ -8,7 +8,7 @@ all: file_to_obj.exe test.exe
 clean:
 	-del /q *.exe *.obj
 
-file_to_obj.exe: file_to_obj.c main.c
+file_to_obj.exe: file_to_obj.c simple_basename.c main.c
 	$(CL) $(CFLAGS) $(CPPFLAGS) $** -Fe$@
 
 lorem.txt.obj: file_to_obj.exe

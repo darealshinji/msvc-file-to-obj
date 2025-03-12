@@ -37,5 +37,5 @@ const char *text = (const char *)data_bin;
 
 /* use the GETINC_SIZE() macro to receive the correct size
  * value for the target platfrom (excluding terminating NUL) */
-printf("size: %d\n", GETINC_SIZE(data_bin));
+printf("size: %u\n", GETINC_SIZE(data_bin));
 ```
