@@ -22,17 +22,11 @@
  * THE SOFTWARE
  */
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
-#ifdef _MSC_VER
-# define strcasecmp  _stricmp
-# define strncasecmp _strnicmp
-#else
-# include <strings.h>
-#endif
-
 #include "file_to_obj.h"
 
 
@@ -71,6 +65,30 @@ static const uint8_t munknown[2] = { 0x00, 0x00 };
 
 
 
+static int read_hex(uint8_t *buf, const char *text)
+{
+    unsigned long val;
+    uint16_t res;
+
+    if (strlen(text) > 6) {
+        fprintf(stderr, "value longer than 2 bytes: %s\n", text);
+        return -1;
+    }
+
+    errno = 0;
+    val = strtoul(text, NULL, 16);
+
+    if (errno != 0) {
+        perror("strtoul");
+        return -1;
+    }
+
+    res = htole16((uint16_t)val);
+    memcpy(buf, &res, sizeof(uint16_t));
+
+    return 0;
+}
+
 static void print_help(const char *exe)
 {
 #ifdef _WIN32
@@ -80,7 +98,9 @@ static void print_help(const char *exe)
     printf("usage: %s [--machine=TARGET] FILE [FILE2 [..]]\n"
            "       %s --help\n"
            "\n"
-           "TARGET values: ARM ARM64 X64 X86 NONE\n\n", exe, exe);
+           "TARGET values: ARM ARM64 X64 X86 NONE\n"
+           "or 2 byte Image File Machine Constant, i.e. 0x8664\n"
+           "\n", exe, exe);
 }
 
 static void try_help(const char *msg, const char *exe)
@@ -100,6 +120,7 @@ int main(int argc, char **argv)
 {
     char *p;
     const uint8_t *machine = MDEF;
+    uint8_t mbuf[2] = { 0, 0 };
     int argind = 0;
 
     if (argc < 2) {
@@ -108,6 +129,14 @@ int main(int argc, char **argv)
     }
 
     /* parse arguments */
+
+    for (int i = 1; i < argc; i++) {
+        if (STREQ(argv[i], "--help")) {
+            print_help(argv[0]);
+            return 0;
+        }
+    }
+
     for (int i = 1; i < argc; i++) {
         if (!STRBEG(argv[i], "--")) {
             argind = i;
@@ -116,11 +145,7 @@ int main(int argc, char **argv)
 
         p = argv[i] + 2;
 
-        if (STREQ(p, "help")) {
-            print_help(argv[0]);
-            return 0;
-        }
-        else if (STREQ(p, "machine") || STREQ(p, "machine=")) {
+        if (STREQ(p, "machine") || STREQ(p, "machine=")) {
             fprintf(stderr, "missing argument: %s\n", argv[i]);
             try_help(NULL, argv[0]);
             return 1;
@@ -128,7 +153,13 @@ int main(int argc, char **argv)
         else if (STRBEG(p, "machine=")) {
             p += sizeof("machine=") - 1;
 
-            if (STREQ(p, "X86")) {
+            if (STRBEG(p, "0x")) {
+                if (read_hex(mbuf, p) != 0) {
+                    try_help(NULL, argv[0]);
+                    return 1;
+                }
+                machine = mbuf;
+            } else if (STREQ(p, "X86")) {
                 machine = mx86;
             } else if (STREQ(p, "X64")) {
                 machine = mx64;

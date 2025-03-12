@@ -29,32 +29,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _MSC_VER
-# pragma comment(lib, "ws2_32")
-# include <winsock2.h>   /* htonl */
-# define strcasecmp  _stricmp
-# define strncasecmp _strnicmp
-#else
-# include <arpa/inet.h>  /* htonl */
-# include <endian.h>     /* htole32 */
-#endif
-
 #include "file_to_obj.h"
-
-#if defined(_MSC_VER) && !defined(__clang__)
-# define BSWAP32(x)  _byteswap_ulong(x)
-#else
-# define BSWAP32(x)  __builtin_bswap32(x)
-#endif
-
-#ifdef _MSC_VER
-# if defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86)
-#  define htole32(x)  x  /* x86 is always LE */
-# else
-#  define htole32(x)  BSWAP32(htonl(x))
-# endif
-#endif
 
 #define SUFFIX_BE      "__size_BE__"
 #define SUFFIX_LE      "__size_LE__"
