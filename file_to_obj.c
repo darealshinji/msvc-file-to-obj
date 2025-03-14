@@ -30,9 +30,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "file_to_obj.h"
+#include "incbin_msvc.h"
 
-#define SUFFIX_BE      "__size_BE__"
-#define SUFFIX_LE      "__size_LE__"
+#define XSTRINGIFY(x)  #x
+#define STRINGIFY(x)   XSTRINGIFY(x)
+
+#define SUFFIX_BE      STRINGIFY(INCBIN_SUFFIX_BIG)
+#define SUFFIX_LE      STRINGIFY(INCBIN_SUFFIX_LITTLE)
 #define SUFFIX_BE_LEN  (sizeof(SUFFIX_BE) - 1)
 #define SUFFIX_LE_LEN  (sizeof(SUFFIX_LE) - 1)
 
@@ -40,7 +44,7 @@
 #define WRITE_BUF(BUF, STREAM) \
     write_data(&BUF, sizeof(BUF), STREAM)
 
-#define SET_LE_UINT32(BUF,OFF,VAL) \
+#define SET_UINT32_LE(BUF,OFF,VAL) \
 { \
     const uint32_t tmp = htole32(VAL); \
     uint8_t *ptr = BUF; \
@@ -133,19 +137,19 @@ static void write_header(FILE *fpOut, const uint8_t *machine, long hSizeOfRawDat
     memcpy(&coff_header, machine, 2);
     hHdrSize = sizeof(coff_header) + 3*sizeof(section_table);
     hPointerToSymbolTable = hHdrSize + hSizeOfRawData + 2*sizeof(uint32_t);
-    SET_LE_UINT32(coff_header, off_PointerToSymbolTable, hPointerToSymbolTable);
+    SET_UINT32_LE(coff_header, off_PointerToSymbolTable, hPointerToSymbolTable);
     WRITE_BUF(coff_header, fpOut);
 
     /* section table */
-    SET_LE_UINT32(section_table, off_SizeOfRawData, hSizeOfRawData);
-    SET_LE_UINT32(section_table, off_PointerToRawData, hHdrSize);
+    SET_UINT32_LE(section_table, off_SizeOfRawData, hSizeOfRawData);
+    SET_UINT32_LE(section_table, off_PointerToRawData, hHdrSize);
     WRITE_BUF(section_table, fpOut); /* symbol #1 (data) */
 
-    SET_LE_UINT32(section_table, off_SizeOfRawData, sizeof(uint32_t));
-    SET_LE_UINT32(section_table, off_PointerToRawData, hHdrSize + hSizeOfRawData);
+    SET_UINT32_LE(section_table, off_SizeOfRawData, sizeof(uint32_t));
+    SET_UINT32_LE(section_table, off_PointerToRawData, hHdrSize + hSizeOfRawData);
     WRITE_BUF(section_table, fpOut); /* symbol #2 (BE size) */
 
-    SET_LE_UINT32(section_table, off_PointerToRawData,
+    SET_UINT32_LE(section_table, off_PointerToRawData,
         hHdrSize + hSizeOfRawData + sizeof(uint32_t));
     WRITE_BUF(section_table, fpOut); /* symbol #3 (LE size) */
 }
@@ -198,13 +202,13 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
     hSizeOfStringTable += mangle + symbol_len + 1;
 
     /* symbol table #2 (size BE) */
-    SET_LE_UINT32(symbol_table, 4, hSizeOfStringTable);
+    SET_UINT32_LE(symbol_table, 4, hSizeOfStringTable);
     symbol_table[off_SectionNumber] = 0x02;
     WRITE_BUF(symbol_table, fpOut);
     hSizeOfStringTable += mangle + symbol_len + SUFFIX_BE_LEN + 1;
 
     /* symbol table #3 (size LE) */
-    SET_LE_UINT32(symbol_table, 4, hSizeOfStringTable);
+    SET_UINT32_LE(symbol_table, 4, hSizeOfStringTable);
     symbol_table[off_SectionNumber] = 0x03;
     WRITE_BUF(symbol_table, fpOut);
     hSizeOfStringTable += mangle + symbol_len + SUFFIX_LE_LEN + 1;
@@ -236,9 +240,10 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
  * COFF header (20 bytes)
  * section table (40 bytes)
  *
- * file data size (4 bytes Big Endian)
  * file data (n bytes)
  * 4 NUL bytes to terminate text data
+ * file data size (4 bytes Big Endian)
+ * file data size (4 bytes Little Endian)
  *
  * symbol table (18 bytes)
  *
