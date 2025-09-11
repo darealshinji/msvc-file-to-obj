@@ -2,7 +2,7 @@ Save files directly into COFF object format and make them
 accessible externally in other translation units.
 
 This is intended to be used with MSVC.
-On other compilers use `incbin.h`: https://github.com/darealshinji/incbin
+On other compilers use `incbin.h`: https://github.com/graphitemaster/incbin
 
 Usage
 -----
