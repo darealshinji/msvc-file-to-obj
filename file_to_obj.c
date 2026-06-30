@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2024-2025 Carsten Janssen
+ * Copyright (c) 2024-2026 Carsten Janssen
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@
 #include <string.h>
 #include "file_to_obj.h"
 #include "incbin_msvc.h"
+#include "file.h"
 
 #define XSTRINGIFY(x)  #x
 #define STRINGIFY(x)   XSTRINGIFY(x)
@@ -40,19 +41,7 @@
 #define SUFFIX_BE_LEN  (sizeof(SUFFIX_BE) - 1)
 #define SUFFIX_LE_LEN  (sizeof(SUFFIX_LE) - 1)
 
-/* write entire buffer to stream */
-#define WRITE_BUF(BUF, STREAM) \
-    write_data(&BUF, sizeof(BUF), STREAM)
-
-#define SET_UINT32_LE(BUF,OFF,VAL) \
-{ \
-    const uint32_t tmp = htole32(VAL); \
-    uint8_t *ptr = BUF; \
-    memcpy(ptr + OFF, &tmp, sizeof(uint32_t)); \
-}
-
-
-static const uint32_t nullbytes = 0;
+#define NUM_NULLBYTES  4
 
 
 static FILE *open_file(const char *name, const char *mode)
@@ -98,67 +87,47 @@ static char *symbolic_name(const char *name)
     return out;
 }
 
-static void write_header(FILE *fpOut, const uint8_t *machine, long hSizeOfRawData)
+static void write_headers(FILE *fpOut, uint16_t machine, long raw_data_size)
 {
-    uint8_t coff_header[20] = {
-        0, 0,           /* Machine */
-        0x03, 0,        /* NumberOfSections */
-        0, 0, 0, 0,     /* TimeDateStamp */
-        0, 0, 0, 0,     /* PointerToSymbolTable */
-        0x03, 0, 0, 0,  /* NumberOfSymbols */
-        0, 0,           /* SizeOfOptionalHeader */
-        0x01, 0x02      /* Characteristics
-                          (IMAGE_FILE_RELOCS_STRIPPED |
-                           IMAGE_FILE_DEBUG_STRIPPED) */
-    };
+    HEADER_DATA hdr;
 
-    const uint8_t off_PointerToSymbolTable = 8;
+    memset(&hdr, 0, sizeof(hdr));
 
-    uint8_t section_table[40] = {
-        '.','r','d','a','t','a', 0, 0, /* Name (.rdata) */
-        0, 0, 0, 0,       /* VirtualSize */
-        0, 0, 0, 0,       /* VirtualAddress */
-        0, 0, 0, 0,       /* SizeOfRawData */
-        0, 0, 0, 0,       /* PointerToRawData */
-        0, 0, 0, 0,       /* PointerToRelocations */
-        0, 0, 0, 0,       /* PointerToLinenumbers */
-        0, 0,             /* NumberOfRelocations */
-        0, 0,             /* NumberOfLinenumbers */
-        0x40, 0, 0, 0x40  /* Characteristics
-                            (IMAGE_SCN_CNT_INITIALIZED_DATA |
-                             IMAGE_SCN_MEM_READ) */
-    };
+    /* section headers */
 
-    const uint8_t off_SizeOfRawData = 16;
-    const uint8_t off_PointerToRawData = 20;
-    uint32_t hPointerToSymbolTable, hHdrSize;
+    /* symbol #1 (data) */
+    strncpy((char *)hdr.Sections[0].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    hdr.Sections[0].SizeOfRawData    = htole32(raw_data_size + NUM_NULLBYTES);
+    hdr.Sections[0].PointerToRawData = htole32(sizeof(HEADER_DATA));
+    hdr.Sections[0].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
-    /* COFF header */
-    memcpy(&coff_header, machine, 2);
-    hHdrSize = sizeof(coff_header) + 3*sizeof(section_table);
-    hPointerToSymbolTable = hHdrSize + hSizeOfRawData + 2*sizeof(uint32_t);
-    SET_UINT32_LE(coff_header, off_PointerToSymbolTable, hPointerToSymbolTable);
-    WRITE_BUF(coff_header, fpOut);
+    /* symbol #2 (BE size) */
+    strncpy((char *)hdr.Sections[1].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    hdr.Sections[1].SizeOfRawData    = htole32(sizeof(uint32_t));
+    hdr.Sections[1].PointerToRawData = htole32(hdr.Sections[0].PointerToRawData + hdr.Sections[0].SizeOfRawData);
+    hdr.Sections[1].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
-    /* section table */
-    SET_UINT32_LE(section_table, off_SizeOfRawData, hSizeOfRawData);
-    SET_UINT32_LE(section_table, off_PointerToRawData, hHdrSize);
-    WRITE_BUF(section_table, fpOut); /* symbol #1 (data) */
+    /* symbol #3 (LE size) */
+    strncpy((char *)hdr.Sections[2].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    hdr.Sections[2].SizeOfRawData    = htole32(sizeof(uint32_t));
+    hdr.Sections[2].PointerToRawData = htole32(hdr.Sections[1].PointerToRawData + hdr.Sections[1].SizeOfRawData);
+    hdr.Sections[2].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
-    SET_UINT32_LE(section_table, off_SizeOfRawData, sizeof(uint32_t));
-    SET_UINT32_LE(section_table, off_PointerToRawData, hHdrSize + hSizeOfRawData);
-    WRITE_BUF(section_table, fpOut); /* symbol #2 (BE size) */
+    /* file header */
+    hdr.FileHeader.Machine              = htole16(machine);
+    hdr.FileHeader.NumberOfSections     = htole32(3);
+    hdr.FileHeader.PointerToSymbolTable = htole32(hdr.Sections[2].PointerToRawData + hdr.Sections[2].SizeOfRawData);
+    hdr.FileHeader.NumberOfSymbols      = htole32(3);
+    hdr.FileHeader.Characteristics      = htole16(IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_DEBUG_STRIPPED);
 
-    SET_UINT32_LE(section_table, off_PointerToRawData,
-        hHdrSize + hSizeOfRawData + sizeof(uint32_t));
-    WRITE_BUF(section_table, fpOut); /* symbol #3 (LE size) */
+    write_data(&hdr, sizeof(hdr), fpOut);
 }
 
 static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
 {
     uint8_t buffer[1024];
     size_t nread;
-    uint32_t uSizeOfRawData;
+    uint32_t l;
 
     memset(buffer, 0, sizeof(buffer));
 
@@ -168,68 +137,61 @@ static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
     }
 
     /* terminating NUL bytes */
-    WRITE_BUF(nullbytes, fpOut);
+    for (int i = 0; i < NUM_NULLBYTES; i++) {
+        putc(0, fpOut);
+    }
 
     /* data size (Big Endian) */
-    uSizeOfRawData = htonl(raw_data_size);
-    WRITE_BUF(uSizeOfRawData, fpOut);
+    l = htonl(raw_data_size);
+    write_data(&l, sizeof(l), fpOut);
 
     /* data size (Little Endian) */
-    uSizeOfRawData = htole32(raw_data_size);
-    WRITE_BUF(uSizeOfRawData, fpOut);
+    l = htole32(raw_data_size);
+    write_data(&l, sizeof(l), fpOut);
 }
 
-static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
+static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machine)
 {
-    uint8_t symbol_table[18] = {
-        0, 0, 0, 0,     /* Name (assume it's longer than 8 bytes) */
-        0x04, 0, 0, 0,  /* Offset into string table */
-        0, 0, 0, 0,     /* Value */
-        0x01, 0,        /* SectionNumber */
-        0, 0,           /* Type */
-        0x02,           /* StorageClass (external) */
-        0               /* NumberOfAuxSymbols */
-    };
+    SYMBOL_TABLE_ENTRY sym[3];
+    const uint32_t symlen = (uint32_t)strlen(symbol);
+    uint32_t strtab_size;
 
-    const uint8_t off_SectionNumber = 12;
-    uint32_t symbol_len, leSizeOfStringTable, hSizeOfStringTable;
+    /* on x86 symbols are prefixed with underscores */
+    const uint8_t mangle = (machine == IMAGE_FILE_MACHINE_I386) ? 1 : 0;
+    const char *pfx = mangle ? "_" : "";
 
-    symbol_len = (uint32_t)strlen(symbol);
-    hSizeOfStringTable = sizeof(uint32_t); /* string table size */
+    memset(&sym, 0, sizeof(sym));
 
-    /* symbol table #1 (data) */
-    WRITE_BUF(symbol_table, fpOut);
-    hSizeOfStringTable += mangle + symbol_len + 1;
+    /* data */
+    sym[0].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
+    sym[0].u.Offset.Offset = htole32(sizeof(strtab_size));
+    sym[0].SectionNumber   = htole16(1);
 
-    /* symbol table #2 (size BE) */
-    SET_UINT32_LE(symbol_table, 4, hSizeOfStringTable);
-    symbol_table[off_SectionNumber] = 0x02;
-    WRITE_BUF(symbol_table, fpOut);
-    hSizeOfStringTable += mangle + symbol_len + SUFFIX_BE_LEN + 1;
+    /* size BE */
+    sym[1].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
+    sym[1].u.Offset.Offset = htole32(sym[0].u.Offset.Offset + mangle + symlen + 1);
+    sym[1].SectionNumber   = htole16(2);
 
-    /* symbol table #3 (size LE) */
-    SET_UINT32_LE(symbol_table, 4, hSizeOfStringTable);
-    symbol_table[off_SectionNumber] = 0x03;
-    WRITE_BUF(symbol_table, fpOut);
-    hSizeOfStringTable += mangle + symbol_len + SUFFIX_LE_LEN + 1;
+    /* size LE */
+    sym[2].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
+    sym[2].u.Offset.Offset = htole32(sym[1].u.Offset.Offset + mangle + symlen + SUFFIX_BE_LEN + 1);
+    sym[2].SectionNumber   = htole16(3);
 
-    /* string table size */
-    leSizeOfStringTable = htole32(hSizeOfStringTable);
-    WRITE_BUF(leSizeOfStringTable, fpOut);
+    for (int i=0; i < 3; i++) {
+        write_data(&sym[i], SYMBOL_TABLE_ENTRY_SIZE_UNALIGNED, fpOut);
+    }
 
-    /* _<symbol> + NUL */
-    if (mangle) { fputc('_', fpOut); }
-    write_data(symbol, symbol_len + 1, fpOut);
+    /* string table size entry */
+    strtab_size = htole32(sym[2].u.Offset.Offset + mangle + symlen + SUFFIX_LE_LEN + 1);
+    write_data(&strtab_size, sizeof(strtab_size), fpOut);
 
-    /* _<symbol>_size_BE + NUL */
-    if (mangle) { fputc('_', fpOut); }
-    write_data(symbol, symbol_len, fpOut);
-    write_data(SUFFIX_BE, SUFFIX_BE_LEN + 1, fpOut);
-
-    /* _<symbol>_size_LE + NUL */
-    if (mangle) { fputc('_', fpOut); }
-    write_data(symbol, symbol_len, fpOut);
-    write_data(SUFFIX_LE, SUFFIX_LE_LEN + 1, fpOut);
+    /* write NUL termintated symbol list */
+    fprintf(fpOut, "%s%s", pfx, symbol);
+    putc(0, fpOut);
+    fprintf(fpOut, "%s%s" SUFFIX_BE, pfx, symbol);
+    putc(0, fpOut);
+    fprintf(fpOut, "%s%s" SUFFIX_LE, pfx, symbol);
+    putc(0, fpOut);
 }
 
 /**
@@ -250,13 +212,12 @@ static void save_symtab_to_coff(FILE *fpOut, const char *symbol, uint8_t mangle)
  * string table size (4 bytes)
  * string table (list of null-terminated strings)
  */
-void save_to_coff(const char *infile, const char *outfile, const uint8_t *machine, const char *symbol)
+void save_to_coff(const char *infile, const char *outfile, uint16_t machine, const char *symbol)
 {
     FILE *fpIn, *fpOut;
     char *outTmp = NULL;
     char *symTmp = NULL;
-    long raw_data_size, hSizeOfRawData;
-    uint8_t mangle = 0;
+    long raw_data_size;
 
     /* open files */
     fpIn = open_file(infile, "rb");
@@ -281,22 +242,14 @@ void save_to_coff(const char *infile, const char *outfile, const uint8_t *machin
 
     rewind(fpIn);
 
-    hSizeOfRawData = raw_data_size + sizeof(nullbytes);
-
-    write_header(fpOut, machine, hSizeOfRawData);
+    write_headers(fpOut, machine, raw_data_size);
     save_data_to_coff(fpIn, fpOut, raw_data_size);
 
-    /* on x86 symbols are prefixed with underscores
-     * (IMAGE_FILE_MACHINE_I386 = 0x014C) */
-    if (machine[0] == 0x4C && machine[1] == 0x01) {
-        mangle = 1;
-    }
-
     if (symbol) {
-        save_symtab_to_coff(fpOut, symbol, mangle);
+        save_symbols_to_coff(fpOut, symbol, machine);
     } else {
         symTmp = symbolic_name(infile);
-        save_symtab_to_coff(fpOut, symTmp, mangle);
+        save_symbols_to_coff(fpOut, symTmp, machine);
         free(symTmp);
     }
 

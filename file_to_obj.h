@@ -31,6 +31,11 @@
 # endif
 #endif
 
+#ifdef _WIN32
 const char *simple_basename(const char *str);
-void save_to_coff(const char *infile, const char *outfile, const uint8_t *machine, const char *symbol);
+#else
+# define simple_basename(x) x
+#endif
+
+void save_to_coff(const char *infile, const char *outfile, uint16_t machine, const char *symbol);
 

@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "file_to_obj.h"
+#include "file.h"
 
 
 /* case-insensitive string checks */
@@ -35,44 +36,14 @@
 #define STRBEG(STR,PFX)  (strncasecmp(STR, PFX, sizeof(PFX)-1) == 0)
 
 
-/* set default machine type */
-#if defined(_M_X64) || defined(_M_AMD64)
-# define MDEF mx64
-#elif defined(_M_IX86)
-# define MDEF mx86
-#elif defined(_M_ARM64)
-# define MDEF marm64
-#elif defined(_M_ARM) && defined(_M_THUMB)
-# define MDEF marmnt
-#else
-# define MDEF munknown
-#endif
 
-/* IMAGE_FILE_MACHINE_AMD64 = 0x8664 */
-static const uint8_t     mx64[2] = { 0x64, 0x86 };
-
-/* IMAGE_FILE_MACHINE_I386 = 0x014C */
-static const uint8_t     mx86[2] = { 0x4C, 0x01 };
-
-/* IMAGE_FILE_MACHINE_ARM64 = 0xAA64 */
-static const uint8_t   marm64[2] = { 0x64, 0xAA };
-
-/* IMAGE_FILE_MACHINE_ARMNT = 0x01C4 */
-static const uint8_t   marmnt[2] = { 0xC4, 0x01 };
-
-/* IMAGE_FILE_MACHINE_UNKNOWN */
-static const uint8_t munknown[2] = { 0x00, 0x00 };
-
-
-
-static int read_hex(uint8_t *buf, const char *text)
+static uint16_t read_hex(const char *text)
 {
     unsigned long val;
-    uint16_t res;
 
     if (strlen(text) > 6) {
         fprintf(stderr, "value longer than 2 bytes: %s\n", text);
-        return -1;
+        exit(1);
     }
 
     errno = 0;
@@ -80,20 +51,15 @@ static int read_hex(uint8_t *buf, const char *text)
 
     if (errno != 0) {
         perror("strtoul");
-        return -1;
+        exit(1);
     }
 
-    res = htole16((uint16_t)val);
-    memcpy(buf, &res, sizeof(uint16_t));
-
-    return 0;
+    return (uint16_t)val;
 }
 
 static void print_help(const char *exe)
 {
-#ifdef _WIN32
     exe = simple_basename(exe);
-#endif
 
     printf("usage: %s [--machine=TARGET] FILE [FILE2 [..]]\n"
            "       %s --help\n"
@@ -105,9 +71,7 @@ static void print_help(const char *exe)
 
 static void try_help(const char *msg, const char *exe)
 {
-#ifdef _WIN32
     exe = simple_basename(exe);
-#endif
 
     if (msg) {
         fprintf(stderr, "%s\n", msg);
@@ -119,8 +83,7 @@ static void try_help(const char *msg, const char *exe)
 int main(int argc, char **argv)
 {
     char *p;
-    const uint8_t *machine = MDEF;
-    uint8_t mbuf[2] = { 0, 0 };
+    uint16_t machine = IMAGE_FILE_MACHINE_DEFAULT;
     int argind = 0;
 
     if (argc < 2) {
@@ -154,21 +117,17 @@ int main(int argc, char **argv)
             p += sizeof("machine=") - 1;
 
             if (STRBEG(p, "0x")) {
-                if (read_hex(mbuf, p) != 0) {
-                    try_help(NULL, argv[0]);
-                    return 1;
-                }
-                machine = mbuf;
-            } else if (STREQ(p, "X86")) {
-                machine = mx86;
+                machine = read_hex(p);
             } else if (STREQ(p, "X64")) {
-                machine = mx64;
+                machine = IMAGE_FILE_MACHINE_AMD64;
+            } else if (STREQ(p, "X86")) {
+                machine = IMAGE_FILE_MACHINE_I386;
             } else if (STREQ(p, "ARM")) {
-                machine = marmnt;
+                machine = IMAGE_FILE_MACHINE_ARMNT;
             } else if (STREQ(p, "ARM64")) {
-                machine = marm64;
+                machine = IMAGE_FILE_MACHINE_ARM64;
             } else if (STREQ(p, "NONE")) {
-                machine = munknown;
+                machine = IMAGE_FILE_MACHINE_UNKNOWN;
             } else {
                 fprintf(stderr, "unknown argument for --machine: %s\n", p);
                 try_help(NULL, argv[0]);
