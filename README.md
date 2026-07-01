@@ -16,9 +16,10 @@ cl -W3 -O2 test.c lorem.txt.obj
 ```
 
 Using the tool like `file_to_obj data.bin` will generate a file `data.bin.obj`
-with the symbols `data_bin data_bin_size_BE data_bin_size_LE`.
+with the symbols `data_bin data_bin_INCBIN_SIZE_BIG data_bin_INCBIN_SIZE_LITTLE`.
 4 NUL bytes will be appended to the data so you can use it as NUL termintated
-text in different encodings.
+text in different encodings. Those NUL bytes are not counted in the data size
+values.
 
 Example:
 ``` C

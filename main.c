@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2024 Carsten Janssen
+ * Copyright (c) 2024-2026 Carsten Janssen
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,14 +27,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "file_to_obj.h"
 #include "file.h"
-
+#include "simple_basename.h"
 
 /* case-insensitive string checks */
-#define STREQ(a,b)       (strcasecmp(a,b) == 0)
-#define STRBEG(STR,PFX)  (strncasecmp(STR, PFX, sizeof(PFX)-1) == 0)
+#ifdef _MSC_VER
+# define STREQ(a,b)       (_stricmp(a,b) == 0)
+# define STRBEG(STR,PFX)  (_strnicmp(STR, PFX, sizeof(PFX)-1) == 0)
+#else
+# include <strings.h>
+# define STREQ(a,b)       (strcasecmp(a,b) == 0)
+# define STRBEG(STR,PFX)  (strncasecmp(STR, PFX, sizeof(PFX)-1) == 0)
+#endif
 
+
+/* file_to_obj.c */
+extern void save_to_coff(const char *infile, const char *outfile, uint16_t machine, const char *symbol);
 
 
 static uint16_t read_hex(const char *text)
@@ -59,7 +67,9 @@ static uint16_t read_hex(const char *text)
 
 static void print_help(const char *exe)
 {
+#ifdef _WIN32
     exe = simple_basename(exe);
+#endif
 
     printf("usage: %s [--machine=TARGET] FILE [FILE2 [..]]\n"
            "       %s --help\n"
@@ -71,7 +81,9 @@ static void print_help(const char *exe)
 
 static void try_help(const char *msg, const char *exe)
 {
+#ifdef _WIN32
     exe = simple_basename(exe);
+#endif
 
     if (msg) {
         fprintf(stderr, "%s\n", msg);

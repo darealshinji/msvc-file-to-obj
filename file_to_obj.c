@@ -24,14 +24,30 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
+#include "incbin_msvc.h"  /* common macros */
+
+#ifdef _MSC_VER
+# pragma comment(lib, "ws2_32") /* htonl() */
+# include <winsock2.h>
+# ifdef INCBIN_LITTLE_ENDIAN
+#  define htole16(x)  x
+#  define htole32(x)  x
+# else
+#  define htole16(x)  _byteswap_ushort(htons(x))
+#  define htole32(x)  _byteswap_ulong(htonl(x))
+# endif
+#else
+# include <arpa/inet.h>  /* htonl() */
+# include <endian.h>     /* htole32() */
+#endif
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "file_to_obj.h"
-#include "incbin_msvc.h"
 #include "file.h"
+#include "simple_basename.h"
 
 #define XSTRINGIFY(x)  #x
 #define STRINGIFY(x)   XSTRINGIFY(x)
@@ -40,8 +56,6 @@
 #define SUFFIX_LE      STRINGIFY(INCBIN_SUFFIX_LITTLE)
 #define SUFFIX_BE_LEN  (sizeof(SUFFIX_BE) - 1)
 #define SUFFIX_LE_LEN  (sizeof(SUFFIX_LE) - 1)
-
-#define NUM_NULLBYTES  4
 
 
 static FILE *open_file(const char *name, const char *mode)
@@ -97,7 +111,7 @@ static void write_headers(FILE *fpOut, uint16_t machine, long raw_data_size)
 
     /* symbol #1 (data) */
     strncpy((char *)hdr.Sections[0].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
-    hdr.Sections[0].SizeOfRawData    = htole32(raw_data_size + NUM_NULLBYTES);
+    hdr.Sections[0].SizeOfRawData    = htole32(raw_data_size + sizeof(uint32_t)); /* + NUL bytes */
     hdr.Sections[0].PointerToRawData = htole32(sizeof(HEADER_DATA));
     hdr.Sections[0].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
@@ -137,9 +151,8 @@ static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
     }
 
     /* terminating NUL bytes */
-    for (int i = 0; i < NUM_NULLBYTES; i++) {
-        putc(0, fpOut);
-    }
+    l = 0;
+    write_data(&l, sizeof(l), fpOut);
 
     /* data size (Big Endian) */
     l = htonl(raw_data_size);
@@ -178,7 +191,7 @@ static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machi
     sym[2].SectionNumber   = htole16(3);
 
     for (int i=0; i < 3; i++) {
-        write_data(&sym[i], SYMBOL_TABLE_ENTRY_SIZE_UNALIGNED, fpOut);
+        write_data(&sym[i], sizeof(sym[i]) - sizeof(sym[i].Unused), fpOut);
     }
 
     /* string table size entry */
@@ -186,12 +199,9 @@ static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machi
     write_data(&strtab_size, sizeof(strtab_size), fpOut);
 
     /* write NUL termintated symbol list */
-    fprintf(fpOut, "%s%s", pfx, symbol);
-    putc(0, fpOut);
-    fprintf(fpOut, "%s%s" SUFFIX_BE, pfx, symbol);
-    putc(0, fpOut);
-    fprintf(fpOut, "%s%s" SUFFIX_LE, pfx, symbol);
-    putc(0, fpOut);
+    fprintf(fpOut, "%s%s%c", pfx, symbol, 0);
+    fprintf(fpOut, "%s%s%s%c", pfx, symbol, SUFFIX_BE, 0);
+    fprintf(fpOut, "%s%s%s%c", pfx, symbol, SUFFIX_LE, 0);
 }
 
 /**
