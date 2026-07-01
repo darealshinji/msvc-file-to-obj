@@ -50,9 +50,9 @@
 
 #if !defined(INCBIN_LITTLE_ENDIAN)
 # ifdef _WIN32
-#  include <winsock2.h>
+#  include <winsock2.h> /* ntohl */
 # else
-#  include <arpa/inet.h>
+#  include <arpa/inet.h> /* ntohl */
 # endif
 #endif
 
@@ -63,13 +63,10 @@
 #endif
 
 /* suffix used by symbols */
-#define INCBIN_SUFFIX_BIG       _INCBIN_SIZE_BIG     /* Big Endian */
-#define INCBIN_SUFFIX_LITTLE    _INCBIN_SIZE_LITTLE  /* Little Endian */
-
-#define INCBIN_EVAL(x)          x
-#define INCBIN_CAT(a,b)         INCBIN_EVAL(a) ## INCBIN_EVAL(b)
-#define INCBIN_SYMLEN_BIG(x)    INCBIN_CAT(x, INCBIN_SUFFIX_BIG)
-#define INCBIN_SYMLEN_LITTLE(x) INCBIN_CAT(x, INCBIN_SUFFIX_LITTLE)
+#define INCBIN_SUFFIX_BIG       _INCBIN_SIZE_BIG
+#define INCBIN_SUFFIX_LITTLE    _INCBIN_SIZE_LITTLE
+#define INCBIN_SYMLEN_BIG(x)    x ## _INCBIN_SIZE_BIG
+#define INCBIN_SYMLEN_LITTLE(x) x ## _INCBIN_SIZE_LITTLE
 
 /**
  * reference the data

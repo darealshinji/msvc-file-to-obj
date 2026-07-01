@@ -42,7 +42,7 @@
 
 
 /* file_to_obj.c */
-extern void save_to_coff(const char *infile, const char *outfile, uint16_t machine, const char *symbol);
+extern void save_to_coff(const char *infile, uint16_t machine);
 
 
 static uint16_t read_hex(const char *text)
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     }
 
     while (argind < argc) {
-        save_to_coff(argv[argind++], NULL, machine, NULL);
+        save_to_coff(argv[argind++], machine);
     }
 
     return 0;

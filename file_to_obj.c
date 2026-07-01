@@ -22,23 +22,34 @@
  * THE SOFTWARE
  */
 
-#define _CRT_SECURE_NO_WARNINGS
+#ifdef _MSC_VER
+# define _CRT_SECURE_NO_WARNINGS
+# pragma comment(lib, "ws2_32") /* htonl() */
+#endif
 
 #include "incbin_msvc.h"  /* common macros */
 
-#ifdef _MSC_VER
-# pragma comment(lib, "ws2_32") /* htonl() */
+/* hton*() */
+#ifdef _WIN32
 # include <winsock2.h>
+#else
+# include <arpa/inet.h>
+#endif
+
+/* htole*() */
+#ifdef _WIN32
 # ifdef INCBIN_LITTLE_ENDIAN
-#  define htole16(x)  x
-#  define htole32(x)  x
-# else
+#  define htole16(x)  (x)
+#  define htole32(x)  (x)
+# elif defined(_MSC_VER)
 #  define htole16(x)  _byteswap_ushort(htons(x))
 #  define htole32(x)  _byteswap_ulong(htonl(x))
+# else
+#  define htole16(x)  __builtin_bswap16(htons(x))
+#  define htole32(x)  __builtin_bswap32(htonl(x))
 # endif
 #else
-# include <arpa/inet.h>  /* htonl() */
-# include <endian.h>     /* htole32() */
+# include <endian.h>
 #endif
 
 #include <ctype.h>
@@ -81,20 +92,17 @@ static void write_data(const void *ptr, const size_t size, FILE *fp)
 
 static char *symbolic_name(const char *name)
 {
-    char *p, *out;
+    const char *pname;
+    char *pout, *out;
 
-    name = simple_basename(name);
-    out = malloc(strlen(name) + 1);
+    pname = simple_basename(name);
+    out = malloc(strlen(pname) + 1);
 
-    for (p = out; *name != 0; name++, p++) {
-        if (isalnum(*name)) {
-            *p = (char)tolower(*name);
-        } else {
-            *p = '_';
-        }
+    for (pout = out; *pname != 0; pname++, pout++) {
+        *pout = isalnum(*pname) ? *pname : '_';
     }
 
-    *p = 0;
+    *pout = 0;
 
     printf("symbol: %s\n", out);
 
@@ -166,12 +174,23 @@ static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
 static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machine)
 {
     SYMBOL_TABLE_ENTRY sym[3];
-    const uint32_t symlen = (uint32_t)strlen(symbol);
-    uint32_t strtab_size;
+    const char *i386_mangle = "";
+    const char *pfx = "";
+    uint32_t symlen, strtab_size;
 
-    /* on x86 symbols are prefixed with underscores */
-    const uint8_t mangle = (machine == IMAGE_FILE_MACHINE_I386) ? 1 : 0;
-    const char *pfx = mangle ? "_" : "";
+    symlen = (uint32_t)strlen(symbol) + 1; /* + NUL byte */
+
+    /* on i386 symbols are prefixed with underscores */
+    if (machine == IMAGE_FILE_MACHINE_I386) {
+        i386_mangle = "_";
+        symlen++;
+    }
+
+    /* prefix a leading digit with an underscore */
+    if (isdigit(*symbol)) {
+        pfx = "_";
+        symlen++;
+    }
 
     memset(&sym, 0, sizeof(sym));
 
@@ -182,26 +201,27 @@ static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machi
 
     /* size BE */
     sym[1].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
-    sym[1].u.Offset.Offset = htole32(sym[0].u.Offset.Offset + mangle + symlen + 1);
+    sym[1].u.Offset.Offset = htole32(sym[0].u.Offset.Offset + symlen);
     sym[1].SectionNumber   = htole16(2);
 
     /* size LE */
     sym[2].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
-    sym[2].u.Offset.Offset = htole32(sym[1].u.Offset.Offset + mangle + symlen + SUFFIX_BE_LEN + 1);
+    sym[2].u.Offset.Offset = htole32(sym[1].u.Offset.Offset + symlen + SUFFIX_BE_LEN);
     sym[2].SectionNumber   = htole16(3);
 
+    /* save symbol table entries */
     for (int i=0; i < 3; i++) {
         write_data(&sym[i], sizeof(sym[i]) - sizeof(sym[i].Unused), fpOut);
     }
 
     /* string table size entry */
-    strtab_size = htole32(sym[2].u.Offset.Offset + mangle + symlen + SUFFIX_LE_LEN + 1);
+    strtab_size = htole32(sym[2].u.Offset.Offset + symlen + SUFFIX_LE_LEN);
     write_data(&strtab_size, sizeof(strtab_size), fpOut);
 
-    /* write NUL termintated symbol list */
-    fprintf(fpOut, "%s%s%c", pfx, symbol, 0);
-    fprintf(fpOut, "%s%s%s%c", pfx, symbol, SUFFIX_BE, 0);
-    fprintf(fpOut, "%s%s%s%c", pfx, symbol, SUFFIX_LE, 0);
+    /* write NUL termintated symbol name list */
+    fprintf(fpOut, "%s%s%s%c",              i386_mangle, pfx, symbol, 0);
+    fprintf(fpOut, "%s%s%s" SUFFIX_BE "%c", i386_mangle, pfx, symbol, 0);
+    fprintf(fpOut, "%s%s%s" SUFFIX_LE "%c", i386_mangle, pfx, symbol, 0);
 }
 
 /**
@@ -222,28 +242,28 @@ static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machi
  * string table size (4 bytes)
  * string table (list of null-terminated strings)
  */
-void save_to_coff(const char *infile, const char *outfile, uint16_t machine, const char *symbol)
+void save_to_coff(const char *infile, uint16_t machine)
 {
     FILE *fpIn, *fpOut;
-    char *outTmp = NULL;
-    char *symTmp = NULL;
+    char *out = NULL;
+    char *symbol = NULL;
     long raw_data_size;
 
-    /* open files */
+    /* open input file */
     fpIn = open_file(infile, "rb");
 
-    if (outfile) {
-        fpOut = open_file(outfile, "wb");
-    } else {
-        outTmp = malloc(strlen(infile) + 5);
-        strcpy(outTmp, infile);
-        strcat(outTmp, ".obj");
-        fpOut = open_file(outTmp, "wb");
-        free(outTmp);
-    }
+    /* open output file */
+    out = malloc(strlen(infile) + 5);
+    strcpy(out, infile);
+    strcat(out, ".obj");
+    fpOut = open_file(out, "wb");
+    free(out);
 
     /* get file size */
-    fseek(fpIn, 0, SEEK_END);
+    if (fseek(fpIn, 0, SEEK_END) == -1) {
+        perror("fseek()");
+        exit(1);
+    }
 
     if ((raw_data_size = ftell(fpIn)) == -1) {
         perror("ftell()");
@@ -252,16 +272,13 @@ void save_to_coff(const char *infile, const char *outfile, uint16_t machine, con
 
     rewind(fpIn);
 
+    /* save data */
     write_headers(fpOut, machine, raw_data_size);
     save_data_to_coff(fpIn, fpOut, raw_data_size);
 
-    if (symbol) {
-        save_symbols_to_coff(fpOut, symbol, machine);
-    } else {
-        symTmp = symbolic_name(infile);
-        save_symbols_to_coff(fpOut, symTmp, machine);
-        free(symTmp);
-    }
+    symbol = symbolic_name(infile);
+    save_symbols_to_coff(fpOut, symbol, machine);
+    free(symbol);
 
     fclose(fpOut);
     fclose(fpIn);

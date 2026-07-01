@@ -1,14 +1,18 @@
 CFLAGS = -Wall -Wextra -O3
 
 
-all: file_to_obj Lorem.txt.o
+all: file_to_obj test
 
 clean:
-	-rm -f file_to_obj *.o *.obj *.exe
+	-rm -f file_to_obj test *.obj *.exe
 
 file_to_obj: file_to_obj.c main.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) file_to_obj.c main.c -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) file_to_obj.c main.c -o $(LDFLAGS) $@ $(LIBS)
 
-Lorem.txt.o: file_to_obj
+# GNU linker can handle the COFF object file even when compiling for Linux
+test: test.c Lorem.txt.obj
+	$(CC) $(CFLAGS) $(CPPFLAGS) test.c -o $@ Lorem.txt.obj $(LIBS)
+
+Lorem.txt.obj: file_to_obj
 	./file_to_obj Lorem.txt
 

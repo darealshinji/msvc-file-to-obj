@@ -1,8 +1,5 @@
-Save files directly into COFF object format and make them
+Save files directly into COFF object format for use with MSVC and make them
 accessible externally in other translation units.
-
-This is intended to be used with MSVC.
-On other compilers use `incbin.h`: https://github.com/graphitemaster/incbin
 
 Usage
 -----
@@ -11,15 +8,17 @@ Compile tool and test:
 ```
 cl -W3 -O2 file_to_obj.c
 
-file_to_obj lorem.txt
-cl -W3 -O2 test.c lorem.txt.obj
+file_to_obj Lorem.txt
+cl -W3 -O2 test.c Lorem.txt.obj
 ```
+
+The tool itself can also be compiled with MinGW or on Linux.
 
 Using the tool like `file_to_obj data.bin` will generate a file `data.bin.obj`
 with the symbols `data_bin data_bin_INCBIN_SIZE_BIG data_bin_INCBIN_SIZE_LITTLE`.
-4 NUL bytes will be appended to the data so you can use it as NUL termintated
-text in different encodings. Those NUL bytes are not counted in the data size
-values.
+The symbols will be prefixed with an underscore if the filename begins with a digit.
+4 NUL bytes will be appended to the data so you can use it as NUL termintated text
+in different encodings. Those NUL bytes are not counted in the data size values.
 
 Example:
 ``` C

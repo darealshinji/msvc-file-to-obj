@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef _WIN32
-# include <Windows.h>
+# include <windows.h>
 #endif
 #include <stdint.h>
 
@@ -97,6 +97,6 @@ typedef struct _SYMBOL_TABLE_ENTRY {
   uint16_t Type;
   uint8_t  StorageClass;
   uint8_t  NumberOfAuxSymbols;
-  uint8_t  Unused[6];  /* unaligned size is 18 bytes */
+  uint8_t  Unused[6];  /* unaligned struct size is 18 bytes */
 } SYMBOL_TABLE_ENTRY;
 
