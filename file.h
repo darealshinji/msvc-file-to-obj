@@ -70,20 +70,18 @@ typedef struct _IMAGE_SECTION_HEADER {
 typedef struct _HEADER_DATA {
   IMAGE_FILE_HEADER    FileHeader;
   IMAGE_SECTION_HEADER Sections[3];
-} HEADER_DATA;
+} HEADER_DATA, *PHEADER_DATA;
 
 
 /* https://delorie.com/djgpp/doc/coff/symtab.html
- * https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
- * https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#symbol-name-representation */
-#ifndef IMAGE_SYM_CLASS_EXTERNAL
-#define IMAGE_SYM_CLASS_EXTERNAL  2
+ * https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table */
+#if !defined(_WIN32)
+# define IMAGE_SYM_CLASS_EXTERNAL  2
 #endif
-#define SYMBOL_SIZEOF_SHORT_NAME  8
 
 typedef struct _SYMBOL_TABLE_ENTRY {
   union {
-    uint8_t  Name[SYMBOL_SIZEOF_SHORT_NAME];
+    uint8_t  Name[IMAGE_SIZEOF_SHORT_NAME];
     struct {
       uint32_t Zeroes;
       uint32_t Offset;
@@ -94,6 +92,6 @@ typedef struct _SYMBOL_TABLE_ENTRY {
   uint16_t Type;
   uint8_t  StorageClass;
   uint8_t  NumberOfAuxSymbols;
-  uint8_t  Unused[6];  /* unaligned struct size is 18 bytes */
-} SYMBOL_TABLE_ENTRY;
+  uint16_t Unused; /* for alignment */
+} SYMBOL_TABLE_ENTRY, *PSYMBOL_TABLE_ENTRY;
 
