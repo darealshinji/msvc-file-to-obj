@@ -74,7 +74,7 @@ static void print_help(const char *exe)
     printf("usage: %s [--machine=TARGET] FILE [FILE2 [..]]\n"
            "       %s --help\n"
            "\n"
-           "TARGET values: ARM ARM64 X64 X86 NONE\n"
+           "TARGET values: X64 X86 ARM64 NONE\n"
            "or 2 byte Image File Machine Constant, i.e. 0x8664\n"
            "\n", exe, exe);
 }
@@ -134,8 +134,6 @@ int main(int argc, char **argv)
                 machine = IMAGE_FILE_MACHINE_AMD64;
             } else if (STREQ(p, "X86")) {
                 machine = IMAGE_FILE_MACHINE_I386;
-            } else if (STREQ(p, "ARM")) {
-                machine = IMAGE_FILE_MACHINE_ARMNT;
             } else if (STREQ(p, "ARM64")) {
                 machine = IMAGE_FILE_MACHINE_ARM64;
             } else if (STREQ(p, "NONE")) {
