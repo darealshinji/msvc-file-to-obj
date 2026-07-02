@@ -118,19 +118,19 @@ static void write_headers(FILE *fpOut, uint16_t machine, long raw_data_size)
     /* section headers */
 
     /* symbol #1 (data) */
-    strncpy((char *)hdr.Sections[0].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    memcpy(hdr.Sections[0].Name, ".rdata", 6);
     hdr.Sections[0].SizeOfRawData    = htole32(raw_data_size + sizeof(uint32_t)); /* + NUL bytes */
     hdr.Sections[0].PointerToRawData = htole32(sizeof(HEADER_DATA));
     hdr.Sections[0].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* symbol #2 (BE size) */
-    strncpy((char *)hdr.Sections[1].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    memcpy(hdr.Sections[1].Name, ".rdata", 6);
     hdr.Sections[1].SizeOfRawData    = htole32(sizeof(uint32_t));
     hdr.Sections[1].PointerToRawData = htole32(hdr.Sections[0].PointerToRawData + hdr.Sections[0].SizeOfRawData);
     hdr.Sections[1].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* symbol #3 (LE size) */
-    strncpy((char *)hdr.Sections[2].Name, ".rdata", IMAGE_SIZEOF_SHORT_NAME);
+    memcpy(hdr.Sections[2].Name, ".rdata", 6);
     hdr.Sections[2].SizeOfRawData    = htole32(sizeof(uint32_t));
     hdr.Sections[2].PointerToRawData = htole32(hdr.Sections[1].PointerToRawData + hdr.Sections[1].SizeOfRawData);
     hdr.Sections[2].Characteristics  = htole32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
