@@ -171,23 +171,19 @@ static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
     write_data(&l, sizeof(l), fpOut);
 }
 
-static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machine)
+static void save_symbols_to_coff(FILE *fpOut, const char *filename, uint16_t machine)
 {
     SYMBOL_TABLE_ENTRY sym[3];
-    const char *i386_mangle = "";
+    char *symbol;
     const char *pfx = "";
     uint32_t symlen, strtab_size;
 
+    symbol = symbolic_name(filename);
     symlen = (uint32_t)strlen(symbol) + 1; /* + NUL byte */
 
-    /* on i386 symbols are prefixed with underscores */
-    if (machine == IMAGE_FILE_MACHINE_I386) {
-        i386_mangle = "_";
-        symlen++;
-    }
-
-    /* prefix a leading digit with an underscore */
-    if (isdigit(*symbol)) {
+    /* https://learn.microsoft.com/en-us/cpp/build/reference/decorated-names?view=msvc-170#FormatC
+     * the decoration is done on any 32 bit target but practically this is only relevant for i386 */
+    if (machine == IMAGE_FILE_MACHINE_I386 || isdigit(*symbol)) {
         pfx = "_";
         symlen++;
     }
@@ -219,9 +215,11 @@ static void save_symbols_to_coff(FILE *fpOut, const char *symbol, uint16_t machi
     write_data(&strtab_size, sizeof(strtab_size), fpOut);
 
     /* write NUL termintated symbol name list */
-    fprintf(fpOut, "%s%s%s%c",              i386_mangle, pfx, symbol, 0);
-    fprintf(fpOut, "%s%s%s" SUFFIX_BE "%c", i386_mangle, pfx, symbol, 0);
-    fprintf(fpOut, "%s%s%s" SUFFIX_LE "%c", i386_mangle, pfx, symbol, 0);
+    fprintf(fpOut, "%s%s%c",              pfx, symbol, 0);
+    fprintf(fpOut, "%s%s" SUFFIX_BE "%c", pfx, symbol, 0);
+    fprintf(fpOut, "%s%s" SUFFIX_LE "%c", pfx, symbol, 0);
+
+    free(symbol);
 }
 
 /**
@@ -246,7 +244,6 @@ void save_to_coff(const char *infile, uint16_t machine)
 {
     FILE *fpIn, *fpOut;
     char *out = NULL;
-    char *symbol = NULL;
     long raw_data_size;
 
     /* open input file */
@@ -275,10 +272,7 @@ void save_to_coff(const char *infile, uint16_t machine)
     /* save data */
     write_headers(fpOut, machine, raw_data_size);
     save_data_to_coff(fpIn, fpOut, raw_data_size);
-
-    symbol = symbolic_name(infile);
-    save_symbols_to_coff(fpOut, symbol, machine);
-    free(symbol);
+    save_symbols_to_coff(fpOut, infile, machine);
 
     fclose(fpOut);
     fclose(fpIn);
