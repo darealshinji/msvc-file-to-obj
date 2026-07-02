@@ -22,32 +22,34 @@
  * THE SOFTWARE
  */
 
-#ifdef _MSC_VER
-# define _CRT_SECURE_NO_WARNINGS
-# pragma comment(lib, "ws2_32") /* htonl() */
-#endif
+#define _CRT_SECURE_NO_WARNINGS
 
 #include "incbin_msvc.h"  /* common macros */
 
-/* hton*() */
+/* htonl() */
 #ifdef _WIN32
+# ifdef _MSC_VER
+#  pragma comment(lib, "ws2_32")
+# endif
 # include <winsock2.h>
 #else
 # include <arpa/inet.h>
 #endif
 
-/* htole*() */
+/* htole16()/htole32() */
 #ifdef _WIN32
-# ifdef INCBIN_LITTLE_ENDIAN
-#  define htole16(x)  (x)
-#  define htole32(x)  (x)
-# elif defined(_MSC_VER)
-#  define htole16(x)  _byteswap_ushort(htons(x))
-#  define htole32(x)  _byteswap_ulong(htonl(x))
+# if defined(__GNUC__) || defined(__clang__)
+#  define BSWAP16(x)  __builtin_bswap16(x)
+#  define BSWAP32(x)  __builtin_bswap32(x)
 # else
-#  define htole16(x)  __builtin_bswap16(htons(x))
-#  define htole32(x)  __builtin_bswap32(htonl(x))
+#  include <stdlib.h>
+#  define BSWAP16(x)  _byteswap_ushort(x)
+#  define BSWAP32(x)  _byteswap_ulong(x)
 # endif
+# define htole16(x)  (incbin_endianness() == 0xBE ? BSWAP16(x) : (x))
+# define htole32(x)  (incbin_endianness() == 0xBE ? BSWAP32(x) : (x))
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+# include <sys/endian.h>
 #else
 # include <endian.h>
 #endif
@@ -137,7 +139,7 @@ static void write_headers(FILE *fpOut, uint16_t machine, long raw_data_size)
 
     /* file header */
     hdr.FileHeader.Machine              = htole16(machine);
-    hdr.FileHeader.NumberOfSections     = htole32(3);
+    hdr.FileHeader.NumberOfSections     = htole16(3);
     hdr.FileHeader.PointerToSymbolTable = htole32(hdr.Sections[2].PointerToRawData + hdr.Sections[2].SizeOfRawData);
     hdr.FileHeader.NumberOfSymbols      = htole32(3);
     hdr.FileHeader.Characteristics      = htole16(IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_DEBUG_STRIPPED);

@@ -24,37 +24,7 @@
 
 #pragma once
 
-#include <stddef.h>
 #include <stdint.h>
-
-/* try to figure out if we're on a Little Endian system,
- * otherwise include headers that provide ntohl() */
-
-#if !defined(INCBIN_LITTLE_ENDIAN) && \
-     defined(__BYTE_ORDER__) && \
-     defined(__ORDER_LITTLE_ENDIAN__)
-# if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#  define INCBIN_LITTLE_ENDIAN
-# endif
-#endif
-
-#if !defined(INCBIN_LITTLE_ENDIAN) && \
-    (defined(_M_X64) || \
-     defined(_M_AMD64) || \
-     defined(_M_IX86) || \
-     defined(__amd64__) || \
-     defined(__x86_64__) || \
-     defined(__i386__))
-# define INCBIN_LITTLE_ENDIAN
-#endif
-
-#if !defined(INCBIN_LITTLE_ENDIAN)
-# ifdef _WIN32
-#  include <winsock2.h> /* ntohl */
-# else
-#  include <arpa/inet.h> /* ntohl */
-# endif
-#endif
 
 #ifdef __cplusplus
 # define INCBIN_EXTERN  extern "C"
@@ -67,6 +37,40 @@
 #define INCBIN_SUFFIX_LITTLE    _INCBIN_SIZE_LITTLE
 #define INCBIN_SYMLEN_BIG(x)    x ## _INCBIN_SIZE_BIG
 #define INCBIN_SYMLEN_LITTLE(x) x ## _INCBIN_SIZE_LITTLE
+
+
+/**
+ * get the Endianness at runtime; however compiler optimizations will
+ * effectively turn the result into a compile-time value (even at -O1)
+ * so you don't need to rely on compiler macros
+ */
+static inline uint8_t incbin_endianness(void)
+{
+    const uint32_t num = 0x12345678;
+    const uint8_t *p = (const uint8_t *)&num;
+
+    if (p[0]==0x12 &&
+        p[1]==0x34 &&
+        p[2]==0x56 &&
+        p[3]==0x78)
+    {
+        /* Big Endian */
+        return 0xbe;
+    }
+
+    if (p[3]==0x12 &&
+        p[2]==0x34 &&
+        p[1]==0x56 &&
+        p[0]==0x78)
+    {
+        /* Little Endian */
+        return 0x1e;
+    }
+
+    /* Mixed Endian */
+    return 0;
+}
+
 
 /**
  * reference the data
@@ -81,9 +85,10 @@
     INCBIN_EXTERN const uint32_t INCBIN_SYMLEN_BIG(SYMBOL); \
     INCBIN_EXTERN const uint32_t INCBIN_SYMLEN_LITTLE(SYMBOL);
 
+
 /* receive data size */
-#ifdef INCBIN_LITTLE_ENDIAN
-# define INCBIN_SIZE(SYMBOL)  INCBIN_SYMLEN_LITTLE(SYMBOL)  /* Little Endian only */
-#else
-# define INCBIN_SIZE(SYMBOL)  ntohl( INCBIN_SYMLEN_BIG(SYMBOL) )  /* any system */
-#endif
+#define INCBIN_SIZE(SYMBOL) \
+    (incbin_endianness() == 0xBE \
+     ? INCBIN_SYMLEN_BIG(SYMBOL) \
+     : INCBIN_SYMLEN_LITTLE(SYMBOL))
+
