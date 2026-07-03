@@ -22,14 +22,15 @@
  * THE SOFTWARE
  */
 
-#define _CRT_SECURE_NO_WARNINGS
-
+#ifdef _MSC_VER
+# define _CRT_SECURE_NO_WARNINGS
+# include <intrin.h>
+#endif
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "byteswap.h"
 #include "file.h"
 #include "incbin_msvc.h"
 #include "simple_basename.h"
@@ -40,6 +41,34 @@
 #define SUFFIX_LE      STRINGIFY(INCBIN_SUFFIX_LITTLE)
 #define SUFFIX_BE_LEN  (sizeof(SUFFIX_BE) - 1)
 #define SUFFIX_LE_LEN  (sizeof(SUFFIX_LE) - 1)
+
+#ifdef _MSC_VER
+# define BSWAP16(x)  _byteswap_ushort(x)
+# define BSWAP32(x)  _byteswap_ulong(x)
+#else
+# define BSWAP16(x)  __builtin_bswap16(x)
+# define BSWAP32(x)  __builtin_bswap32(x)
+#endif
+
+
+/* check if host is Big Endian (will be optimized away) */
+static int host_is_BE(void) {
+    uint32_t num = 0xAABBCCDD;
+    return (*((uint8_t *)&num) == 0xAA);
+}
+
+/* convert number depending on host byte order */
+static uint32_t BE32(uint32_t x) {
+    return (host_is_BE() ? x : BSWAP32(x));
+}
+
+static uint16_t LE16(uint16_t x) {
+    return (host_is_BE() ? BSWAP16(x) : x);
+}
+
+static uint32_t LE32(uint32_t x) {
+    return (host_is_BE() ? BSWAP32(x) : x);
+}
 
 
 static FILE *open_file(const char *name, const char *mode)
@@ -92,28 +121,28 @@ static void write_headers(FILE *fpOut, uint16_t machine, long raw_data_size)
 
     /* symbol #1 (data) */
     memcpy(hdr.Sections[0].Name, ".rdata", 6);
-    hdr.Sections[0].SizeOfRawData    = HtoLE32(raw_data_size + sizeof(uint32_t)); /* + NUL bytes */
-    hdr.Sections[0].PointerToRawData = HtoLE32(sizeof(HEADER_DATA));
-    hdr.Sections[0].Characteristics  = HtoLE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
+    hdr.Sections[0].SizeOfRawData    = LE32(raw_data_size + sizeof(uint32_t)); /* + NUL bytes */
+    hdr.Sections[0].PointerToRawData = LE32(sizeof(HEADER_DATA));
+    hdr.Sections[0].Characteristics  = LE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* symbol #2 (BE size) */
     memcpy(hdr.Sections[1].Name, ".rdata", 6);
-    hdr.Sections[1].SizeOfRawData    = HtoLE32(sizeof(uint32_t));
-    hdr.Sections[1].PointerToRawData = HtoLE32(hdr.Sections[0].PointerToRawData + hdr.Sections[0].SizeOfRawData);
-    hdr.Sections[1].Characteristics  = HtoLE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
+    hdr.Sections[1].SizeOfRawData    = LE32(sizeof(uint32_t));
+    hdr.Sections[1].PointerToRawData = LE32(hdr.Sections[0].PointerToRawData + hdr.Sections[0].SizeOfRawData);
+    hdr.Sections[1].Characteristics  = LE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* symbol #3 (LE size) */
     memcpy(hdr.Sections[2].Name, ".rdata", 6);
-    hdr.Sections[2].SizeOfRawData    = HtoLE32(sizeof(uint32_t));
-    hdr.Sections[2].PointerToRawData = HtoLE32(hdr.Sections[1].PointerToRawData + hdr.Sections[1].SizeOfRawData);
-    hdr.Sections[2].Characteristics  = HtoLE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
+    hdr.Sections[2].SizeOfRawData    = LE32(sizeof(uint32_t));
+    hdr.Sections[2].PointerToRawData = LE32(hdr.Sections[1].PointerToRawData + hdr.Sections[1].SizeOfRawData);
+    hdr.Sections[2].Characteristics  = LE32(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* file header */
-    hdr.FileHeader.Machine              = HtoLE16(machine);
-    hdr.FileHeader.NumberOfSections     = HtoLE16(3);
-    hdr.FileHeader.PointerToSymbolTable = HtoLE32(hdr.Sections[2].PointerToRawData + hdr.Sections[2].SizeOfRawData);
-    hdr.FileHeader.NumberOfSymbols      = HtoLE32(3);
-    hdr.FileHeader.Characteristics      = HtoLE16(IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_DEBUG_STRIPPED);
+    hdr.FileHeader.Machine              = LE16(machine);
+    hdr.FileHeader.NumberOfSections     = LE16(3);
+    hdr.FileHeader.PointerToSymbolTable = LE32(hdr.Sections[2].PointerToRawData + hdr.Sections[2].SizeOfRawData);
+    hdr.FileHeader.NumberOfSymbols      = LE32(3);
+    hdr.FileHeader.Characteristics      = LE16(IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_DEBUG_STRIPPED);
 
     write_data(&hdr, sizeof(hdr), fpOut);
 }
@@ -136,11 +165,11 @@ static void save_data_to_coff(FILE *fpIn, FILE *fpOut, uint32_t raw_data_size)
     write_data(&l, sizeof(l), fpOut);
 
     /* data size (Big Endian) */
-    l = HtoBE32(raw_data_size);
+    l = BE32(raw_data_size);
     write_data(&l, sizeof(l), fpOut);
 
     /* data size (Little Endian) */
-    l = HtoLE32(raw_data_size);
+    l = LE32(raw_data_size);
     write_data(&l, sizeof(l), fpOut);
 }
 
@@ -165,18 +194,18 @@ static void save_symbols_to_coff(FILE *fpOut, const char *filename, uint16_t mac
 
     /* data */
     sym[0].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
-    sym[0].u.Offset.Offset = HtoLE32(sizeof(strtab_size));
-    sym[0].SectionNumber   = HtoLE16(1);
+    sym[0].u.Offset.Offset = LE32(sizeof(strtab_size));
+    sym[0].SectionNumber   = LE16(1);
 
     /* size BE */
     sym[1].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
-    sym[1].u.Offset.Offset = HtoLE32(sym[0].u.Offset.Offset + symlen);
-    sym[1].SectionNumber   = HtoLE16(2);
+    sym[1].u.Offset.Offset = LE32(sym[0].u.Offset.Offset + symlen);
+    sym[1].SectionNumber   = LE16(2);
 
     /* size LE */
     sym[2].StorageClass    = IMAGE_SYM_CLASS_EXTERNAL;
-    sym[2].u.Offset.Offset = HtoLE32(sym[1].u.Offset.Offset + symlen + SUFFIX_BE_LEN);
-    sym[2].SectionNumber   = HtoLE16(3);
+    sym[2].u.Offset.Offset = LE32(sym[1].u.Offset.Offset + symlen + SUFFIX_BE_LEN);
+    sym[2].SectionNumber   = LE16(3);
 
     /* save symbol table entries */
     for (int i=0; i < 3; i++) {
@@ -184,7 +213,7 @@ static void save_symbols_to_coff(FILE *fpOut, const char *filename, uint16_t mac
     }
 
     /* string table size entry */
-    strtab_size = HtoLE32(sym[2].u.Offset.Offset + symlen + SUFFIX_LE_LEN);
+    strtab_size = LE32(sym[2].u.Offset.Offset + symlen + SUFFIX_LE_LEN);
     write_data(&strtab_size, sizeof(strtab_size), fpOut);
 
     /* write NUL termintated symbol name list */
