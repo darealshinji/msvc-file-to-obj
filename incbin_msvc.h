@@ -74,7 +74,7 @@ inline uint8_t incbin_byteorder(void)
 /**
  * reference the data
  *
- * "INCBIN(data)" for example will become:
+ * "INCBIN(data);" for example will become:
  *   extern const uint8_t  data[];
  *   extern const uint32_t data_INCBIN_SIZE_BIG;
  *   extern const uint32_t data_INCBIN_SIZE_LITTLE;
@@ -82,7 +82,7 @@ inline uint8_t incbin_byteorder(void)
 #define INCBIN(SYMBOL) \
     INCBIN_EXTERN const uint8_t  SYMBOL[]; \
     INCBIN_EXTERN const uint32_t INCBIN_SYMLEN_BIG(SYMBOL); \
-    INCBIN_EXTERN const uint32_t INCBIN_SYMLEN_LITTLE(SYMBOL);
+    INCBIN_EXTERN const uint32_t INCBIN_SYMLEN_LITTLE(SYMBOL)
 
 
 /* receive data size */

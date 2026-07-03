@@ -24,8 +24,10 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stdlib.h>
+#ifdef _MSC_VER
+# include <intrin.h>
+#endif
+#include <inttypes.h>
 
 
 inline uint16_t byteswap_16(uint16_t val);
@@ -56,8 +58,8 @@ inline uint16_t byteswap_16(uint16_t x)
     return _byteswap_ushort(x);
 #else
     uint16_t r = 0;
-    uint8_t *px = (uint8_t *)&x;
-    uint8_t *pr = (uint8_t *)&r;
+    uint8_t *px = (uint8_t *)((uint16_t *)&x);
+    uint8_t *pr = (uint8_t *)((uint16_t *)&r);
     pr[0] = px[1];
     pr[1] = px[0];
     return r;
@@ -73,8 +75,8 @@ inline uint32_t byteswap_32(uint32_t x)
     return _byteswap_ulong(x);
 #else
     uint32_t r = 0;
-    uint8_t *px = (uint8_t *)&x;
-    uint8_t *pr = (uint8_t *)&r;
+    uint8_t *px = (uint8_t *)((uint32_t *)&x);
+    uint8_t *pr = (uint8_t *)((uint32_t *)&r);
     pr[0] = px[3];
     pr[1] = px[2];
     pr[2] = px[1];
@@ -92,8 +94,8 @@ inline uint64_t byteswap_64(uint64_t x)
     return _byteswap_uint64(x);
 #else
     uint64_t r = 0;
-    uint8_t *px = (uint8_t *)&x;
-    uint8_t *pr = (uint8_t *)&r;
+    uint8_t *px = (uint8_t *)((uint64_t *)&x);
+    uint8_t *pr = (uint8_t *)((uint64_t *)&r);
     pr[0] = px[7];
     pr[1] = px[6];
     pr[2] = px[5];

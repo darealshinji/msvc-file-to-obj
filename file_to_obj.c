@@ -25,8 +25,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "byteswap.h"
