@@ -25,6 +25,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdlib.h>
 
 
 inline uint16_t byteswap_16(uint16_t val);
@@ -49,9 +50,9 @@ inline uint64_t LEtoH64(uint64_t little_endian_64bits);
 
 inline uint16_t byteswap_16(uint16_t x)
 {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__) || defined(HAVE_BUILTIN_BSWAP16)
     return __builtin_bswap16(x);
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(HAVE_BYTESWAP_USHORT)
     return _byteswap_ushort(x);
 #else
     uint16_t r = 0;
@@ -66,9 +67,9 @@ inline uint16_t byteswap_16(uint16_t x)
 
 inline uint32_t byteswap_32(uint32_t x)
 {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__) || defined(HAVE_BUILTIN_BSWAP32)
     return __builtin_bswap32(x);
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(HAVE_BYTESWAP_ULONG)
     return _byteswap_ulong(x);
 #else
     uint32_t r = 0;
@@ -85,9 +86,9 @@ inline uint32_t byteswap_32(uint32_t x)
 
 inline uint64_t byteswap_64(uint64_t x)
 {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__) || defined(HAVE_BUILTIN_BSWAP64)
     return __builtin_bswap64(x);
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(HAVE_BYTESWAP_UINT64)
     return _byteswap_uint64(x);
 #else
     uint64_t r = 0;
