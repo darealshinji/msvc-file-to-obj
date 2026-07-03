@@ -40,34 +40,33 @@
 
 
 /**
- * get the Endianness at runtime; however compiler optimizations will
- * effectively turn the result into a compile-time value (even at -O1)
- * so you don't need to rely on compiler macros
+ * get the Endianness at runtime; compiler optimizations will
+ * effectively turn the result into a compile-time value
  */
-static inline uint8_t incbin_endianness(void)
+inline uint8_t incbin_byteorder(void)
 {
-    const uint32_t num = 0x12345678;
+    const uint32_t num = 0xAABBCCDD;
     const uint8_t *p = (const uint8_t *)&num;
 
-    if (p[0]==0x12 &&
-        p[1]==0x34 &&
-        p[2]==0x56 &&
-        p[3]==0x78)
+    if (p[0]==0xAA &&
+        p[1]==0xBB &&
+        p[2]==0xCC &&
+        p[3]==0xDD)
     {
         /* Big Endian */
         return 0xbe;
     }
 
-    if (p[3]==0x12 &&
-        p[2]==0x34 &&
-        p[1]==0x56 &&
-        p[0]==0x78)
+    if (p[0]==0xDD &&
+        p[1]==0xCC &&
+        p[2]==0xBB &&
+        p[3]==0xAA)
     {
         /* Little Endian */
         return 0x1e;
     }
 
-    /* Mixed Endian */
+    /* Mixed Endian? */
     return 0;
 }
 
@@ -88,7 +87,7 @@ static inline uint8_t incbin_endianness(void)
 
 /* receive data size */
 #define INCBIN_SIZE(SYMBOL) \
-    (incbin_endianness() == 0xBE \
+    (incbin_byteorder() == 0xBE \
      ? INCBIN_SYMLEN_BIG(SYMBOL) \
      : INCBIN_SYMLEN_LITTLE(SYMBOL))
 
