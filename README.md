@@ -4,18 +4,11 @@ accessible externally in other translation units.
 Usage
 -----
 
-Compile tool and test:
-```
-cl -W3 -O2 file_to_obj.c
+Compile tool with `nmake` or `make -f Makefile.gcc`.
 
-file_to_obj Lorem.txt
-cl -W3 -O2 test.c Lorem.txt.obj
-```
-
-The tool itself can also be compiled with MinGW or on Linux.
-
-Using the tool like `file_to_obj data.bin` will generate a file `data.bin.obj`
+Using the tool like `file_to_obj out.obj data.bin` will generate a file `out.obj`
 with the symbols `data_bin data_bin_INCBIN_SIZE_BIG data_bin_INCBIN_SIZE_LITTLE`.
+You can add multiple files to a single output: `file_to_obj out.obj data1.bin data2.bin data3.bin`.
 The symbols will be prefixed with an underscore if the filename begins with a digit.
 4 NUL bytes will be appended to the data so you can use it as NUL termintated text
 in different encodings. Those NUL bytes are not counted in the data size values.

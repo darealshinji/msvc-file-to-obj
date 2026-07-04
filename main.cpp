@@ -22,27 +22,23 @@
  * THE SOFTWARE
  */
 
+#ifdef _WIN32
+# include <windows.h>
+#endif
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
+#include <vector>
 #include "file.h"
-#include "simple_basename.h"
+#include "utils.hpp"
 
-/* case-insensitive string checks */
-#ifdef _MSC_VER
-# define STREQ(a,b)       (_stricmp(a,b) == 0)
-# define STRBEG(STR,PFX)  (_strnicmp(STR, PFX, sizeof(PFX)-1) == 0)
-#else
-# include <strings.h>
-# define STREQ(a,b)       (strcasecmp(a,b) == 0)
-# define STRBEG(STR,PFX)  (strncasecmp(STR, PFX, sizeof(PFX)-1) == 0)
-#endif
 
 
 /* file_to_obj.c */
-extern void save_to_coff(const char *infile, uint16_t machine);
+extern void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t machine);
 
 
 static uint16_t read_hex(const char *text)
@@ -67,98 +63,115 @@ static uint16_t read_hex(const char *text)
 
 static void print_help(const char *exe)
 {
-#ifdef _WIN32
-    exe = simple_basename(exe);
-#endif
+    auto path = make_fs_path(exe);
+    exe = path.stem().string().c_str();
 
-    printf("usage: %s [--machine=TARGET] FILE [FILE2 [..]]\n"
-           "       %s --help\n"
+    std::cout << "usage: " << exe << " [--machine=TARGET] OUTPUT FILE1 [FILE2 [..]]\n"
+        << "       " << exe << " --help\n"
            "\n"
            "TARGET values: X64 X86 ARM64 NONE\n"
-           "or 2 byte Image File Machine Constant, i.e. 0x8664\n"
-           "\n", exe, exe);
+           "or 2 byte Image File Machine Constant, i.e. 0x8664"
+        << std::endl;
 }
 
-static void try_help(const char *msg, const char *exe)
+static void try_help(const char *msg1, const char *msg2, const char *exe)
 {
-#ifdef _WIN32
-    exe = simple_basename(exe);
-#endif
+    auto path = make_fs_path(exe);
+    exe = path.stem().string().c_str();
 
-    if (msg) {
-        fprintf(stderr, "%s\n", msg);
+    if (msg1) {
+        std::cerr << "Error: " << msg1 << msg2 << std::endl;
     }
-    fprintf(stderr, "Try `%s --help' for more information.\n", exe);
+
+    std::cerr << "Try `" << exe << " --help' for more information." << std::endl;
 }
 
 
 int main(int argc, char **argv)
 {
+#if defined(_WIN32) && defined(UTF8_EVERYWHERE)
+    /* Set the process code page to UTF-8 with the activeCodePage property in
+     * the appxmanifest during linking and set the console output codepage to
+     * UTF-8 here. SetConsoleCP() is not required and it would keep the new
+     * codepage after the program closes. */
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
+    std::vector<const char *> files;
+    const char *output = NULL;
     char *p;
     uint16_t machine = IMAGE_FILE_MACHINE_DEFAULT;
     int argind = 0;
 
     if (argc < 2) {
-        try_help("No arguments.", argv[0]);
+        try_help("No arguments.", "", argv[0]);
         return 1;
     }
 
     /* parse arguments */
 
     for (int i = 1; i < argc; i++) {
-        if (STREQ(argv[i], "--help")) {
+        if (strcasecmp(argv[i], "--help") == 0) {
             print_help(argv[0]);
             return 0;
         }
     }
 
     for (int i = 1; i < argc; i++) {
-        if (!STRBEG(argv[i], "--")) {
-            argind = i;
-            break;
+        if (!strbeg(argv[i], "--")) {
+            if (!output) {
+                output = argv[i];
+                continue;
+            } else {
+                argind = i;
+                break;
+            }
         }
 
         p = argv[i] + 2;
 
-        if (STREQ(p, "machine") || STREQ(p, "machine=")) {
+        if (strcasecmp(p, "machine") == 0 || strcasecmp(p, "machine=") == 0) {
             fprintf(stderr, "missing argument: %s\n", argv[i]);
-            try_help(NULL, argv[0]);
+            try_help(NULL, "", argv[0]);
             return 1;
         }
-        else if (STRBEG(p, "machine=")) {
+        else if (strbeg(p, "machine=")) {
             p += sizeof("machine=") - 1;
 
-            if (STRBEG(p, "0x")) {
+            if (strbeg(p, "0x")) {
                 machine = read_hex(p);
-            } else if (STREQ(p, "X64")) {
+            } else if (strcasecmp(p, "X64") == 0) {
                 machine = IMAGE_FILE_MACHINE_AMD64;
-            } else if (STREQ(p, "X86")) {
+            } else if (strcasecmp(p, "X86") == 0) {
                 machine = IMAGE_FILE_MACHINE_I386;
-            } else if (STREQ(p, "ARM64")) {
+            } else if (strcasecmp(p, "ARM64") == 0) {
                 machine = IMAGE_FILE_MACHINE_ARM64;
-            } else if (STREQ(p, "NONE")) {
+            } else if (strcasecmp(p, "NONE") == 0) {
                 machine = IMAGE_FILE_MACHINE_UNKNOWN;
             } else {
-                fprintf(stderr, "unknown argument for --machine: %s\n", p);
-                try_help(NULL, argv[0]);
+                try_help("unknown argument for --machine: ", p, argv[0]);
                 return 1;
             }
             continue;
         }
 
-        fprintf(stderr, "unknown option: %s\n", argv[i]);
-        try_help(NULL, argv[0]);
+        try_help("unknown option: ", argv[i], argv[0]);
         return 1;
     }
 
-    if (argind == 0) {
-        try_help("missing input file(s)", argv[0]);
+    if (!output) {
+        try_help("missing output file", "", argv[0]);
+        return 1;
+    } else if (argind == 0) {
+        try_help("missing input file(s)", "", argv[0]);
         return 1;
     }
 
-    while (argind < argc) {
-        save_to_coff(argv[argind++], machine);
+    for (int i = argind; i < argc; i++) {
+        files.push_back(argv[i]);
     }
+
+    save_to_coff(files, output, machine);
 
     return 0;
 }

@@ -1,4 +1,5 @@
-CFLAGS = -Wall -Wextra -O3
+CFLAGS   = -Wall -Wextra -O3
+CXXFLAGS = -Wall -Wextra -O3 -std=gnu++23
 
 
 all: file_to_obj test
@@ -6,13 +7,13 @@ all: file_to_obj test
 clean:
 	-rm -f file_to_obj test *.obj *.exe
 
-file_to_obj: file_to_obj.c main.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) file_to_obj.c main.c -o $(LDFLAGS) $@ $(LIBS)
+file_to_obj: file_to_obj.cpp main.cpp
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) file_to_obj.cpp main.cpp -o $(LDFLAGS) $@ $(LIBS)
 
 # GNU linker can handle the COFF object file even when compiling for Linux
-test: test.c Lorem.txt.obj
-	$(CC) $(CFLAGS) $(CPPFLAGS) test.c -o $@ Lorem.txt.obj $(LIBS)
+test: test.c data.obj
+	$(CC) $(CFLAGS) $(CPPFLAGS) test.c -o $@ data.obj $(LIBS)
 
-Lorem.txt.obj: file_to_obj
-	./file_to_obj Lorem.txt
+data.obj: file_to_obj
+	./file_to_obj $@ Lorem1.txt Lorem2.txt Lorem3.txt
 
