@@ -24,12 +24,19 @@
 
 #pragma once
 
-#if !defined(_MSC_VER)
+#ifdef _MSC_VER
+# include <intrin.h>
+#else
 # include <strings.h>
 #endif
+#ifdef __MINGW32__
+# include <locale>
+#endif
+#include <stdint.h>
 #include <string.h>
+#include <bit>       /* std::endian, std::byteswap */
+#include <concepts>  /* std::integral */
 #include <filesystem>
-#include <locale>
 
 
 /* MSVC compat */
@@ -63,3 +70,55 @@ std::filesystem::path make_fs_path(T name)
 #endif
 }
 
+
+template<std::integral T>
+constexpr T byteswap(T val) noexcept
+{
+#ifdef __cpp_lib_byteswap
+
+    return std::byteswap(val);
+
+#elif defined(_MSC_VER) && !defined(__clang__)
+
+    if constexpr (sizeof(T) == 2) {
+        return _byteswap_ushort(static_cast<uint16_t>(val));
+    } else if constexpr (sizeof(T) == 4) {
+        return _byteswap_ulong(static_cast<uint32_t>(val));
+    }
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+    if constexpr (sizeof(T) == 2) {
+        return __builtin_bswap16(static_cast<uint16_t>(val));
+    } else if constexpr (sizeof(T) == 4) {
+        return __builtin_bswap32(static_cast<uint32_t>(val));
+    }
+
+#else
+
+#error "byteswap not implemented"
+
+#endif
+}
+
+
+template<std::integral T>
+constexpr T htobe(T value) noexcept
+{
+    if constexpr (std::endian::native == std::endian::big) {
+        return value;
+    } else {
+        return byteswap(value);
+    }
+}
+
+
+template<std::integral T>
+constexpr T htole(T value) noexcept
+{
+    if constexpr (std::endian::native == std::endian::little) {
+        return value;
+    } else {
+        return byteswap(value);
+    }
+}

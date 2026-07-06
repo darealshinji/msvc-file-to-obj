@@ -4,6 +4,7 @@
 # include <windows.h>
 #endif
 #include <stdint.h>
+#include <vector>
 
 
 /* https://learn.microsoft.com/en-us/windows/win32/sysinfo/image-file-machine-constants */
@@ -89,4 +90,7 @@ typedef struct _SYMBOL_TABLE_ENTRY {
   uint8_t  NumberOfAuxSymbols;
 } SYMBOL_TABLE_ENTRY, *PSYMBOL_TABLE_ENTRY;
 #pragma pack(pop)
+
+
+void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t machine);
 

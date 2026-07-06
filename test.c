@@ -1,7 +1,5 @@
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
-
 #include "incbin_msvc.h"
 
 INCBIN(Lorem1_txt);

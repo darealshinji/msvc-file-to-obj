@@ -24,66 +24,26 @@
 
 #ifdef _MSC_VER
 # define _CRT_SECURE_NO_WARNINGS
-# include <intrin.h>
 #endif
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <bit>
-#include <concepts>
 #include <filesystem>
-#include <iostream>
+#include <iterator>  /* std::data */
 #include <string>
 #include <vector>
-#include "file.h"
+#include "file.hpp"
 #include "incbin_msvc.h"
 #include "utils.hpp"
 
-namespace fs = std::filesystem;
 
 #define XSTRINGIFY(x)  #x
 #define STRINGIFY(x)   XSTRINGIFY(x)
-#define SUFFIX_BE      STRINGIFY(INCBIN_SUFFIX_BIG)
-#define SUFFIX_LE      STRINGIFY(INCBIN_SUFFIX_LITTLE)
 
+namespace fs = std::filesystem;
 
-template<std::integral T>
-constexpr T byteswap(T value) noexcept
-{
-#if !defined(__cpp_lib_byteswap) && defined(_MSC_VER)
-    if constexpr (sizeof(T) == 2) { /* uint16_t */
-        return _byteswap_ushort(static_cast<T>(value));
-    } else if constexpr (sizeof(T) == 4) { /* uint32_t */
-        return _byteswap_ulong(static_cast<T>(value));
-    }
-#else
-    return std::byteswap(value);
-#endif
-}
-
-
-template<std::integral T>
-constexpr T htobe(T value) noexcept
-{
-    if constexpr (std::endian::native == std::endian::big) {
-        return value;
-    } else {
-        return byteswap(value);
-    }
-}
-
-
-template<std::integral T>
-constexpr T htole(T value) noexcept
-{
-    if constexpr (std::endian::native == std::endian::little) {
-        return value;
-    } else {
-        return byteswap(value);
-    }
-}
 
 
 static FILE *open_file(const char *name, const char *mode)

@@ -24,21 +24,21 @@
 
 #ifdef _WIN32
 # include <windows.h>
+#else
+# include <strings.h>
 #endif
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <filesystem>
 #include <iostream>
+#include <string>
 #include <vector>
-#include "file.h"
+#include "file.hpp"
 #include "utils.hpp"
 
-
-
-/* file_to_obj.c */
-extern void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t machine);
 
 
 static uint16_t read_hex(const char *text)
