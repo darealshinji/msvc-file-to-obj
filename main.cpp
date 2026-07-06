@@ -34,6 +34,7 @@
 #include <string.h>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include "file.hpp"
@@ -179,11 +180,15 @@ int main(int argc, char **argv)
         save_to_coff(files, output, machine);
     }
     catch (const std::string &msg) {
-        std::cerr << msg << std::endl;
+        std::cerr << "error: " << msg << std::endl;
         return 1;
     }
     catch (fs::filesystem_error const &ex) {
-        std::cerr << ex.what() << std::endl;
+        std::cerr << "error: " << ex.what() << std::endl;
+        return 1;
+    }
+    catch (std::ofstream::iostate &) {
+        std::cerr << "error: failed to write data to output file: " << output << std::endl;
         return 1;
     }
 

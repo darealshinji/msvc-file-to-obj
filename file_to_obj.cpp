@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <filesystem>
+#include <fstream>
 #include <iterator>  /* std::data */
 #include <string>
 #include <vector>
@@ -47,35 +48,39 @@ namespace fs = std::filesystem;
 
 
 
-static FILE *open_file(const char *name, const char *mode)
+template<typename T>
+void write_data(const T *ptr, size_t size, std::ofstream &ofs)
 {
-    FILE *fp = fopen(name, mode);
+    ofs.write(reinterpret_cast<const char *>(ptr), size);
 
-    if (!fp) {
-        std::string msg = "fopen(): ";
-        msg += strerror(errno);
-        msg += " [";
-        msg += name;
-        msg += ']';
-
-        throw msg;
+    if (ofs.rdstate() == std::ofstream::badbit ||
+        ofs.rdstate() == std::ofstream::failbit)
+    {
+        throw ofs.rdstate();
     }
+}
 
-    return fp;
+template<typename T>
+void write_data(const T &val, std::ofstream &ofs)
+{
+    write_data(reinterpret_cast<const char *>(&val), sizeof(T), ofs);
 }
 
 
-static void write_data(const void *ptr, const size_t size, FILE *fp, const char *output)
+static bool read_data(char &ch, std::ifstream &ifs, const char *file)
 {
-    if (fwrite(ptr, 1, size, fp) != size) {
-        std::string msg = "fwrite(): ";
-        msg += strerror(errno);
-        msg += " [";
-        msg += output;
-        msg += ']';
-
-        throw msg;
+    if (ifs.get(ch)) {
+        return true;
     }
+
+    if (ifs.rdstate() == std::ios_base::badbit ||
+        ifs.rdstate() == std::ios_base::failbit)
+    {
+        throw std::string("failed to read data from file: ") + file;
+    }
+
+    /* EOF */
+    return false;
 }
 
 
@@ -107,16 +112,18 @@ static uint32_t section_headers(std::vector<const char *> files, std::vector<IMA
             (sizeof(IMAGE_SECTION_HEADER) * files.size() * 3));
 
     for (auto &file : files) {
-        uint32_t sizes[3] = {
-            static_cast<uint32_t>(fs::file_size(file)) + 4, /* data + NUL bytes */
+        auto fsize = static_cast<uint32_t>(fs::file_size(file));
+
+        uint32_t raw_sizes[3] = {
+            fsize + 4, /* data + NUL bytes */
             4, /* BE size */
             4  /* LE size */
         };
 
         for (int i = 0; i < 3; i++) {
-            sec.SizeOfRawData     = htole(sizes[i]);
+            sec.SizeOfRawData     = htole(raw_sizes[i]);
             sec.PointerToRawData  = htole(PointerToRawData);
-            PointerToRawData     += sizes[i];
+            PointerToRawData     += raw_sizes[i];
             sections.push_back(sec);
         }
     }
@@ -125,36 +132,35 @@ static uint32_t section_headers(std::vector<const char *> files, std::vector<IMA
 }
 
 
-static void save_file_data(std::vector<const char *> &files, FILE *fpOut, const char *output)
+static void save_file_data(std::vector<const char *> &files, std::ofstream &ofs)
 {
-    uint8_t buffer[1024];
-    size_t nread;
-
-    memset(buffer, 0, sizeof(buffer));
-
     for (auto &file : files) {
+        char ch;
         uint32_t raw_data_size = 0;
-        FILE *fpIn = open_file(file, "rb");
+
+        std::ifstream ifs(file, std::ios_base::binary | std::ios_base::in);
+
+        if (!ifs.is_open()) {
+            throw std::string("failed to open file for reading: ") + file;
+        }
 
         /* copy file data */
-        while ((nread = fread(&buffer, 1, sizeof(buffer), fpIn)) != 0) {
-            write_data(&buffer, nread, fpOut, output);
-            raw_data_size += static_cast<uint32_t>(nread);
+        while (read_data(ch, ifs, file)) {
+            write_data(ch, ofs);
+            raw_data_size++;
         }
 
         /* terminating NUL bytes */
-        memset(buffer, 0, 4);
-        write_data(&buffer, 4, fpOut, output);
+        uint32_t val = 0;
+        write_data(val, ofs);
 
         /* data size (Big Endian) */
-        uint32_t val = htobe(raw_data_size);
-        write_data(&val, sizeof(val), fpOut, output);
+        val = htobe(raw_data_size);
+        write_data(val, ofs);
 
         /* data size (Little Endian) */
         val = htole(raw_data_size);
-        write_data(&val, sizeof(val), fpOut, output);
-
-        fclose(fpIn);
+        write_data(val, ofs);
     }
 }
 
@@ -238,27 +244,30 @@ void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t
     auto strtab = symbol_table(symtab, files, machine);
 
     /* write file header */
-    FILE *fpOut = open_file(output, "wb");
-    write_data(&fhdr, sizeof(fhdr), fpOut, output);
+    std::ofstream ofs(output, std::ios_base::binary | std::ios_base::out);
+
+    if (!ofs.is_open()) {
+        throw std::string("failed to open file for writing: ") + output;
+    }
+
+    write_data(fhdr, ofs);
 
     /* write section headers */
     for (auto &e : sec_hdrs) {
-        write_data(&e, sizeof(e), fpOut, output);
+        write_data(e, ofs);
     }
 
     /* save file data and file sizes */
-    save_file_data(files, fpOut, output);
+    save_file_data(files, ofs);
 
     /* write symbol table entries */
     for (auto &e : symtab) {
-        write_data(&e, sizeof(e), fpOut, output);
+        write_data(e, ofs);
     }
 
     /* save string table */
     uint32_t val = htole(static_cast<uint32_t>(strtab.size() + 4));
-    write_data(&val, sizeof(val), fpOut, output);
-    write_data(std::data(strtab), strtab.size(), fpOut, output);
-
-    fclose(fpOut);
+    write_data(val, ofs);
+    write_data(std::data(strtab), strtab.size(), ofs);
 }
 
