@@ -26,6 +26,7 @@
 # define _CRT_SECURE_NO_WARNINGS
 #endif
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,20 +52,29 @@ static FILE *open_file(const char *name, const char *mode)
     FILE *fp = fopen(name, mode);
 
     if (!fp) {
-        perror("fopen()");
-        fprintf(stderr, "(%s)\n", name);
-        exit(1);
+        std::string msg = "fopen(): ";
+        msg += strerror(errno);
+        msg += " [";
+        msg += name;
+        msg += ']';
+
+        throw msg;
     }
 
     return fp;
 }
 
 
-static void write_data(const void *ptr, const size_t size, FILE *fp)
+static void write_data(const void *ptr, const size_t size, FILE *fp, const char *output)
 {
     if (fwrite(ptr, 1, size, fp) != size) {
-        perror("fwrite()");
-        exit(1);
+        std::string msg = "fwrite(): ";
+        msg += strerror(errno);
+        msg += " [";
+        msg += output;
+        msg += ']';
+
+        throw msg;
     }
 }
 
@@ -115,7 +125,7 @@ static uint32_t section_headers(std::vector<const char *> files, std::vector<IMA
 }
 
 
-static void save_file_data(std::vector<const char *> &files, FILE *fpOut)
+static void save_file_data(std::vector<const char *> &files, FILE *fpOut, const char *output)
 {
     uint8_t buffer[1024];
     size_t nread;
@@ -128,21 +138,21 @@ static void save_file_data(std::vector<const char *> &files, FILE *fpOut)
 
         /* copy file data */
         while ((nread = fread(&buffer, 1, sizeof(buffer), fpIn)) != 0) {
-            write_data(&buffer, nread, fpOut);
+            write_data(&buffer, nread, fpOut, output);
             raw_data_size += static_cast<uint32_t>(nread);
         }
 
         /* terminating NUL bytes */
         memset(buffer, 0, 4);
-        write_data(&buffer, 4, fpOut);
+        write_data(&buffer, 4, fpOut, output);
 
         /* data size (Big Endian) */
         uint32_t val = htobe(raw_data_size);
-        write_data(&val, sizeof(val), fpOut);
+        write_data(&val, sizeof(val), fpOut, output);
 
         /* data size (Little Endian) */
         val = htole(raw_data_size);
-        write_data(&val, sizeof(val), fpOut);
+        write_data(&val, sizeof(val), fpOut, output);
 
         fclose(fpIn);
     }
@@ -229,25 +239,25 @@ void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t
 
     /* write file header */
     FILE *fpOut = open_file(output, "wb");
-    write_data(&fhdr, sizeof(fhdr), fpOut);
+    write_data(&fhdr, sizeof(fhdr), fpOut, output);
 
     /* write section headers */
     for (auto &e : sec_hdrs) {
-        write_data(&e, sizeof(e), fpOut);
+        write_data(&e, sizeof(e), fpOut, output);
     }
 
     /* save file data and file sizes */
-    save_file_data(files, fpOut);
+    save_file_data(files, fpOut, output);
 
     /* write symbol table entries */
     for (auto &e : symtab) {
-        write_data(&e, sizeof(e), fpOut);
+        write_data(&e, sizeof(e), fpOut, output);
     }
 
     /* save string table */
     uint32_t val = htole(static_cast<uint32_t>(strtab.size() + 4));
-    write_data(&val, sizeof(val), fpOut);
-    write_data(std::data(strtab), strtab.size(), fpOut);
+    write_data(&val, sizeof(val), fpOut, output);
+    write_data(std::data(strtab), strtab.size(), fpOut, output);
 
     fclose(fpOut);
 }

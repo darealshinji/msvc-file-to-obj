@@ -39,6 +39,8 @@
 #include "file.hpp"
 #include "utils.hpp"
 
+namespace fs = std::filesystem;
+
 
 
 static uint16_t read_hex(const char *text)
@@ -159,6 +161,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* check input/output */
     if (!output) {
         try_help("missing output file", "", argv[0]);
         return 1;
@@ -171,7 +174,18 @@ int main(int argc, char **argv)
         files.push_back(argv[i]);
     }
 
-    save_to_coff(files, output, machine);
+    /* try/catch block */
+    try {
+        save_to_coff(files, output, machine);
+    }
+    catch (const std::string &msg) {
+        std::cerr << msg << std::endl;
+        return 1;
+    }
+    catch (fs::filesystem_error const &ex) {
+        std::cerr << ex.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }
