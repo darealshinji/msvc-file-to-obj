@@ -164,10 +164,13 @@ static std::string symbol_table(std::vector<SYMBOL_TABLE_ENTRY> &symtab,
 {
     SYMBOL_TABLE_ENTRY sym;
     uint16_t SectionNumber = 1;
+    uint32_t size;
     std::string strtab;
 
     memset(&sym, 0, sizeof(sym));
     sym.StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
+
+    strtab.insert(0, sizeof(size), 0); /* placeholder */
 
     for (auto &file : files) {
         std::string name = symbolic_name(file);
@@ -186,13 +189,16 @@ static std::string symbol_table(std::vector<SYMBOL_TABLE_ENTRY> &symtab,
 
         /* data + size BE + size LE */
         for (int i = 0; i < 3; i++, SectionNumber++) {
-            sym.u.Offset.Offset = htole(static_cast<uint32_t>(strtab.size() + 4)); /* + 4 bytes size entry */
+            sym.u.Offset.Offset = htole(static_cast<uint32_t>(strtab.size()));
             sym.SectionNumber = htole(SectionNumber);
             strtab += name + suffix[i];
             strtab += '\0';
             symtab.push_back(sym);
         }
     }
+
+    size = htole(static_cast<uint32_t>(strtab.size()));
+    memcpy(std::data(strtab), &size, sizeof(size));
 
     return strtab;
 }
@@ -259,8 +265,6 @@ void save_to_coff(std::vector<const char *> &files, fs::path &output, uint16_t m
     }
 
     /* save string table */
-    uint32_t val = htole(static_cast<uint32_t>(strtab.size() + 4));
-    write_data(val, ofs);
     write_data(std::data(strtab), strtab.size(), ofs);
 }
 
