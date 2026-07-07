@@ -4,6 +4,7 @@
 # include <windows.h>
 #endif
 #include <stdint.h>
+#include <filesystem>
 #include <vector>
 
 
@@ -92,5 +93,5 @@ typedef struct _SYMBOL_TABLE_ENTRY {
 #pragma pack(pop)
 
 
-void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t machine);
+void save_to_coff(std::vector<const char *> &files, std::filesystem::path &output, uint16_t machine);
 

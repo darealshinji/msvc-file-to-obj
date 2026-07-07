@@ -38,6 +38,8 @@
 #include <concepts>  /* std::integral */
 #include <filesystem>
 
+namespace fs = std::filesystem;
+
 
 /* MSVC compat */
 #ifdef _MSC_VER
@@ -61,12 +63,14 @@ bool strbeg(const char *str, char const (&pfx)[N]) {
 
 
 template<typename T>
-std::filesystem::path make_fs_path(T name)
+fs::path make_fs_path(T name)
 {
 #ifdef __MINGW32__
-    return std::filesystem::path(name, std::locale());
+    /* bug: need to explicitly set locale, otherwise the program
+     * may crash if the name contains non-ANSI characters */
+    return fs::path(name, std::locale());
 #else
-    return std::filesystem::path(name);
+    return fs::path(name);
 #endif
 }
 

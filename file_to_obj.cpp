@@ -40,11 +40,8 @@
 #include "incbin_msvc.h"
 #include "utils.hpp"
 
-
 #define XSTRINGIFY(x)  #x
 #define STRINGIFY(x)   XSTRINGIFY(x)
-
-namespace fs = std::filesystem;
 
 
 
@@ -108,27 +105,23 @@ static uint32_t section_headers(std::vector<const char *> files, std::vector<IMA
     sec.Characteristics = htole(IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
 
     /* data offset starts after section headers */
-    uint32_t PointerToRawData = static_cast<uint32_t>(sizeof(IMAGE_FILE_HEADER) +
+    uint32_t rawdata_pointer = static_cast<uint32_t>(sizeof(IMAGE_FILE_HEADER) +
             (sizeof(IMAGE_SECTION_HEADER) * files.size() * 3));
 
     for (auto &file : files) {
         auto fsize = static_cast<uint32_t>(fs::file_size(file));
 
-        uint32_t raw_sizes[3] = {
-            fsize + 4, /* data + NUL bytes */
-            4, /* BE size */
-            4  /* LE size */
-        };
-
         for (int i = 0; i < 3; i++) {
-            sec.SizeOfRawData     = htole(raw_sizes[i]);
-            sec.PointerToRawData  = htole(PointerToRawData);
-            PointerToRawData     += raw_sizes[i];
+            /* data + 4 NUL bytes, BE size and LE size (uint32_t) */
+            sec.SizeOfRawData     = htole(fsize + 4);
+            sec.PointerToRawData  = htole(rawdata_pointer);
+            rawdata_pointer      += fsize + 4;
             sections.push_back(sec);
+            fsize = 0; /* filesize only in first entry */
         }
     }
 
-    return PointerToRawData;
+    return rawdata_pointer;
 }
 
 
@@ -173,12 +166,6 @@ static std::string symbol_table(std::vector<SYMBOL_TABLE_ENTRY> &symtab,
     uint16_t SectionNumber = 1;
     std::string strtab;
 
-    const char *suffix[3] = {
-        "",
-        STRINGIFY(INCBIN_SUFFIX_BIG),
-        STRINGIFY(INCBIN_SUFFIX_LITTLE)
-    };
-
     memset(&sym, 0, sizeof(sym));
     sym.StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
 
@@ -190,6 +177,12 @@ static std::string symbol_table(std::vector<SYMBOL_TABLE_ENTRY> &symtab,
         if (machine == IMAGE_FILE_MACHINE_I386 || isdigit(name.front())) {
             name.insert(0, 1, '_');
         }
+
+        const char *suffix[3] = {
+            "",
+            STRINGIFY(INCBIN_SUFFIX_BIG),
+            STRINGIFY(INCBIN_SUFFIX_LITTLE)
+        };
 
         /* data + size BE + size LE */
         for (int i = 0; i < 3; i++, SectionNumber++) {
@@ -223,7 +216,7 @@ static std::string symbol_table(std::vector<SYMBOL_TABLE_ENTRY> &symtab,
  *
  * string table (4 bytes strtab size + list of null-terminated strings)
  */
-void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t machine)
+void save_to_coff(std::vector<const char *> &files, fs::path &output, uint16_t machine)
 {
     IMAGE_FILE_HEADER fhdr;
     std::vector<IMAGE_SECTION_HEADER> sec_hdrs;
@@ -247,7 +240,7 @@ void save_to_coff(std::vector<const char *> &files, const char *output, uint16_t
     std::ofstream ofs(output, std::ios_base::binary | std::ios_base::out);
 
     if (!ofs.is_open()) {
-        throw std::string("failed to open file for writing: ") + output;
+        throw "failed to open file for writing: " + output.string();
     }
 
     write_data(fhdr, ofs);

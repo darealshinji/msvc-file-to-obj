@@ -27,7 +27,6 @@
 #else
 # include <strings.h>
 #endif
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,53 +39,65 @@
 #include "file.hpp"
 #include "utils.hpp"
 
-namespace fs = std::filesystem;
 
-
-
-static uint16_t read_hex(const char *text)
+static std::string shortname(const char *file)
 {
-    unsigned long val;
+    auto path = make_fs_path(file);
 
-    if (strlen(text) > 6) {
-        fprintf(stderr, "value longer than 2 bytes: %s\n", text);
-        exit(1);
-    }
-
-    errno = 0;
-    val = strtoul(text, NULL, 16);
-
-    if (errno != 0) {
-        perror("strtoul");
-        exit(1);
-    }
-
-    return (uint16_t)val;
+#ifdef _WIN32
+    return path.stem().string();
+#else
+    return path.filename().string();
+#endif
 }
 
-static void print_help(const char *exe)
-{
-    auto path = make_fs_path(exe);
-    exe = path.stem().string().c_str();
 
-    std::cout << "usage: " << exe << " [--machine=TARGET] OUTPUT FILE1 [FILE2 [..]]\n"
-        << "       " << exe << " --help\n"
+static bool read_hex(const char *str, uint16_t &val)
+{
+    char *endptr = NULL;
+    unsigned long l = strtoul(str, &endptr, 16);
+
+    if (*endptr != '\0' || l > 0xffff) {
+        return false;
+    }
+
+    val = static_cast<uint16_t>(l);
+
+    return true;
+}
+
+
+static void print_help(const char *file)
+{
+    auto stem = shortname(file);
+
+    std::cout <<
+           "usage: " << stem << " [-mTARGET] OUTPUT FILE1 [FILE2 [..]]\n"
+           "       " << stem << " --help\n"
            "\n"
            "TARGET values: X64 X86 ARM64 NONE\n"
            "or 2 byte Image File Machine Constant, i.e. 0x8664"
         << std::endl;
 }
 
-static void try_help(const char *msg1, const char *msg2, const char *exe)
-{
-    auto path = make_fs_path(exe);
-    exe = path.stem().string().c_str();
 
-    if (msg1) {
+static void try_help(const char *msg1, const char *msg2, const char *file)
+{
+    if (msg1 && *msg1) {
+        if (!msg2) {
+            msg2 = "";
+        }
+
         std::cerr << "Error: " << msg1 << msg2 << std::endl;
     }
 
-    std::cerr << "Try `" << exe << " --help' for more information." << std::endl;
+    std::cerr << "Try `" << shortname(file) << " --help' for more information." << std::endl;
+}
+
+
+static void try_help(const char *msg, const char *file)
+{
+    try_help(msg, "", file);
 }
 
 
@@ -102,12 +113,10 @@ int main(int argc, char **argv)
 
     std::vector<const char *> files;
     const char *output = NULL;
-    char *p;
     uint16_t machine = IMAGE_FILE_MACHINE_DEFAULT;
-    int argind = 0;
 
     if (argc < 2) {
-        try_help("No arguments.", "", argv[0]);
+        try_help("no arguments", argv[0]);
         return 1;
     }
 
@@ -121,28 +130,20 @@ int main(int argc, char **argv)
     }
 
     for (int i = 1; i < argc; i++) {
-        if (!strbeg(argv[i], "--")) {
-            if (!output) {
-                output = argv[i];
-                continue;
-            } else {
-                argind = i;
-                break;
+        if (strbeg(argv[i], "-m")) {
+            char *p = argv[i] + 2;
+
+            if (!*p) {
+                fprintf(stderr, "missing argument for `-m': %s\n", argv[i]);
+                try_help(NULL, argv[0]);
+                return 1;
             }
-        }
-
-        p = argv[i] + 2;
-
-        if (strcasecmp(p, "machine") == 0 || strcasecmp(p, "machine=") == 0) {
-            fprintf(stderr, "missing argument: %s\n", argv[i]);
-            try_help(NULL, "", argv[0]);
-            return 1;
-        }
-        else if (strbeg(p, "machine=")) {
-            p += sizeof("machine=") - 1;
 
             if (strbeg(p, "0x")) {
-                machine = read_hex(p);
+                if (!read_hex(p, machine)) {
+                    try_help("invalid argument for `-m': ", p, argv[0]);
+                    return 1;
+                }
             } else if (strcasecmp(p, "X64") == 0) {
                 machine = IMAGE_FILE_MACHINE_AMD64;
             } else if (strcasecmp(p, "X86") == 0) {
@@ -152,45 +153,47 @@ int main(int argc, char **argv)
             } else if (strcasecmp(p, "NONE") == 0) {
                 machine = IMAGE_FILE_MACHINE_UNKNOWN;
             } else {
-                try_help("unknown argument for --machine: ", p, argv[0]);
+                try_help("unknown argument for `-m': ", p, argv[0]);
                 return 1;
             }
-            continue;
+        } else if (!output) {
+            output = argv[i];
+        } else {
+            files.push_back(argv[i]);
         }
-
-        try_help("unknown option: ", argv[i], argv[0]);
-        return 1;
     }
 
     /* check input/output */
     if (!output) {
-        try_help("missing output file", "", argv[0]);
+        try_help("missing output file", argv[0]);
         return 1;
-    } else if (argind == 0) {
-        try_help("missing input file(s)", "", argv[0]);
+    } else if (files.empty()) {
+        try_help("missing input file(s)", argv[0]);
         return 1;
     }
 
-    for (int i = argind; i < argc; i++) {
-        files.push_back(argv[i]);
-    }
+    /* set output file extension */
+    auto opath = make_fs_path(output);
+    opath.replace_extension(".obj");
 
     /* try/catch block */
     try {
-        save_to_coff(files, output, machine);
+        save_to_coff(files, opath, machine);
     }
     catch (const std::string &msg) {
         std::cerr << "error: " << msg << std::endl;
         return 1;
     }
-    catch (fs::filesystem_error const &ex) {
+    catch (const fs::filesystem_error &ex) {
         std::cerr << "error: " << ex.what() << std::endl;
         return 1;
     }
-    catch (std::ofstream::iostate &) {
-        std::cerr << "error: failed to write data to output file: " << output << std::endl;
+    catch (const std::ofstream::iostate &) {
+        std::cerr << "error: failed to write data to output file " << opath << std::endl;
         return 1;
     }
+
+    std::cout << "saved data to output file " << opath << std::endl;
 
     return 0;
 }
