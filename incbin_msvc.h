@@ -45,29 +45,13 @@
  */
 inline uint8_t incbin_byteorder(void)
 {
-    const uint32_t num = 0xAABBCCDD;
+    const uint32_t num = 0xbe00001e;
     const uint8_t *p = (const uint8_t *)&num;
 
-    if (p[0]==0xAA &&
-        p[1]==0xBB &&
-        p[2]==0xCC &&
-        p[3]==0xDD)
-    {
-        /* Big Endian */
-        return 0xbe;
-    }
-
-    if (p[0]==0xDD &&
-        p[1]==0xCC &&
-        p[2]==0xBB &&
-        p[3]==0xAA)
-    {
-        /* Little Endian */
-        return 0x1e;
-    }
-
-    /* Mixed Endian? */
-    return 0;
+    /* return values:
+     * 0xbe  Big Endian
+     * 0x1e  Little Endian */
+    return p[0];
 }
 
 
@@ -87,7 +71,7 @@ inline uint8_t incbin_byteorder(void)
 
 /* receive data size */
 #define INCBIN_SIZE(SYMBOL) \
-    (incbin_byteorder() == 0xBE \
+    (incbin_byteorder() == 0xbe \
      ? INCBIN_SYMLEN_BIG(SYMBOL) \
      : INCBIN_SYMLEN_LITTLE(SYMBOL))
 
