@@ -57,7 +57,7 @@ inline int strncasecmp(const char *a, const char *b, size_t n) {
 
 /* case-insensitive comparison if string begins with prefix */
 template<size_t N>
-bool strbeg(const char *str, char const (&pfx)[N]) {
+bool strcasebeg(const char *str, char const (&pfx)[N]) {
     return (strncasecmp(str, pfx, N-1) == 0);
 }
 

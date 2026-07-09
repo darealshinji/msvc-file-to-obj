@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     }
 
     for (int i = 1; i < argc; i++) {
-        if (strbeg(argv[i], "-m")) {
+        if (strcasebeg(argv[i], "-m")) {
             char *p = argv[i] + 2;
 
             if (!*p) {
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
                 return 1;
             }
 
-            if (strbeg(p, "0x")) {
+            if (strcasebeg(p, "0x")) {
                 if (!read_hex(p, machine)) {
                     try_help("invalid argument for `-m': ", p, argv[0]);
                     return 1;

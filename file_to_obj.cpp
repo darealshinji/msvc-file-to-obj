@@ -70,8 +70,8 @@ static bool read_data(char &ch, std::ifstream &ifs, const char *file)
         return true;
     }
 
-    if (ifs.rdstate() == std::ios_base::badbit ||
-        ifs.rdstate() == std::ios_base::failbit)
+    if (ifs.rdstate() == std::ifstream::badbit ||
+        ifs.rdstate() == std::ifstream::failbit)
     {
         throw std::string("failed to read data from file: ") + file;
     }
@@ -111,7 +111,7 @@ static uint32_t section_headers(std::vector<const char *> files, std::vector<IMA
     for (auto &file : files) {
         auto fsize = static_cast<uint32_t>(fs::file_size(file));
 
-        for (int i = 0; i < 3; i++) {
+        for (auto i = 0; i < 3; i++) {
             /* data + 4 NUL bytes, BE size and LE size (uint32_t) */
             sec.SizeOfRawData     = htole(fsize + 4);
             sec.PointerToRawData  = htole(rawdata_pointer);
@@ -131,7 +131,7 @@ static void save_file_data(std::vector<const char *> &files, std::ofstream &ofs)
         char ch;
         uint32_t raw_data_size = 0;
 
-        std::ifstream ifs(file, std::ios_base::binary | std::ios_base::in);
+        std::ifstream ifs(file, std::ifstream::binary | std::ifstream::in);
 
         if (!ifs.is_open()) {
             throw std::string("failed to open file for reading: ") + file;
@@ -243,7 +243,7 @@ void save_to_coff(std::vector<const char *> &files, fs::path &output, uint16_t m
     auto strtab = symbol_table(symtab, files, machine);
 
     /* write file header */
-    std::ofstream ofs(output, std::ios_base::binary | std::ios_base::out);
+    std::ofstream ofs(output, std::ofstream::binary | std::ofstream::out);
 
     if (!ofs.is_open()) {
         throw "failed to open file for writing: " + output.string();
